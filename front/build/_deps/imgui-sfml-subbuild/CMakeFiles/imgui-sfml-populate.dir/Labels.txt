@@ -1,0 +1,14 @@
+# Target labels
+ imgui-sfml-populate
+# Source files and their labels
+E:/1/Егор/ФТЛ/Инфа/Оптовый склад(любимый прак)/FRONTik/NovaPochta_r/front/build/_deps/imgui-sfml-subbuild/CMakeFiles/imgui-sfml-populate
+E:/1/Егор/ФТЛ/Инфа/Оптовый склад(любимый прак)/FRONTik/NovaPochta_r/front/build/_deps/imgui-sfml-subbuild/CMakeFiles/imgui-sfml-populate.rule
+E:/1/Егор/ФТЛ/Инфа/Оптовый склад(любимый прак)/FRONTik/NovaPochta_r/front/build/_deps/imgui-sfml-subbuild/CMakeFiles/imgui-sfml-populate-complete.rule
+E:/1/Егор/ФТЛ/Инфа/Оптовый склад(любимый прак)/FRONTik/NovaPochta_r/front/build/_deps/imgui-sfml-subbuild/imgui-sfml-populate-prefix/src/imgui-sfml-populate-stamp/imgui-sfml-populate-build.rule
+E:/1/Егор/ФТЛ/Инфа/Оптовый склад(любимый прак)/FRONTik/NovaPochta_r/front/build/_deps/imgui-sfml-subbuild/imgui-sfml-populate-prefix/src/imgui-sfml-populate-stamp/imgui-sfml-populate-configure.rule
+E:/1/Егор/ФТЛ/Инфа/Оптовый склад(любимый прак)/FRONTik/NovaPochta_r/front/build/_deps/imgui-sfml-subbuild/imgui-sfml-populate-prefix/src/imgui-sfml-populate-stamp/imgui-sfml-populate-download.rule
+E:/1/Егор/ФТЛ/Инфа/Оптовый склад(любимый прак)/FRONTik/NovaPochta_r/front/build/_deps/imgui-sfml-subbuild/imgui-sfml-populate-prefix/src/imgui-sfml-populate-stamp/imgui-sfml-populate-install.rule
+E:/1/Егор/ФТЛ/Инфа/Оптовый склад(любимый прак)/FRONTik/NovaPochta_r/front/build/_deps/imgui-sfml-subbuild/imgui-sfml-populate-prefix/src/imgui-sfml-populate-stamp/imgui-sfml-populate-mkdir.rule
+E:/1/Егор/ФТЛ/Инфа/Оптовый склад(любимый прак)/FRONTik/NovaPochta_r/front/build/_deps/imgui-sfml-subbuild/imgui-sfml-populate-prefix/src/imgui-sfml-populate-stamp/imgui-sfml-populate-patch.rule
+E:/1/Егор/ФТЛ/Инфа/Оптовый склад(любимый прак)/FRONTik/NovaPochta_r/front/build/_deps/imgui-sfml-subbuild/imgui-sfml-populate-prefix/src/imgui-sfml-populate-stamp/imgui-sfml-populate-test.rule
+E:/1/Егор/ФТЛ/Инфа/Оптовый склад(любимый прак)/FRONTik/NovaPochta_r/front/build/_deps/imgui-sfml-subbuild/imgui-sfml-populate-prefix/src/imgui-sfml-populate-stamp/imgui-sfml-populate-update.rule

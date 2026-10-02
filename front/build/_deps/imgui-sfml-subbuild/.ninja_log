@@ -1,0 +1,21 @@
+# ninja log v7
+2	79	8126777903380512	imgui-sfml-populate-prefix/src/imgui-sfml-populate-stamp/imgui-sfml-populate-mkdir	8d531abc2a4fe1f2
+2	79	8126777903380512	E:/1/Егор/ФТЛ/Инфа/Оптовый склад(любимый прак)/FRONTik/NovaPochta_r/front/build/_deps/imgui-sfml-subbuild/imgui-sfml-populate-prefix/src/imgui-sfml-populate-stamp/imgui-sfml-populate-mkdir	8d531abc2a4fe1f2
+79	3161	8126777934182140	imgui-sfml-populate-prefix/src/imgui-sfml-populate-stamp/imgui-sfml-populate-download	e48650772dec0bad
+79	3161	8126777934182140	E:/1/Егор/ФТЛ/Инфа/Оптовый склад(любимый прак)/FRONTik/NovaPochta_r/front/build/_deps/imgui-sfml-subbuild/imgui-sfml-populate-prefix/src/imgui-sfml-populate-stamp/imgui-sfml-populate-download	e48650772dec0bad
+3162	3313	8126777934323045	imgui-sfml-populate-prefix/src/imgui-sfml-populate-stamp/imgui-sfml-populate-update	6aa406ebedea8690
+3162	3313	8126777934323045	E:/1/Егор/ФТЛ/Инфа/Оптовый склад(любимый прак)/FRONTik/NovaPochta_r/front/build/_deps/imgui-sfml-subbuild/imgui-sfml-populate-prefix/src/imgui-sfml-populate-stamp/imgui-sfml-populate-update	6aa406ebedea8690
+3313	3383	8126777936437932	imgui-sfml-populate-prefix/src/imgui-sfml-populate-stamp/imgui-sfml-populate-patch	cdf33a901984efa
+3313	3383	8126777936437932	E:/1/Егор/ФТЛ/Инфа/Оптовый склад(любимый прак)/FRONTik/NovaPochta_r/front/build/_deps/imgui-sfml-subbuild/imgui-sfml-populate-prefix/src/imgui-sfml-populate-stamp/imgui-sfml-populate-patch	cdf33a901984efa
+3383	3453	8126777937139992	imgui-sfml-populate-prefix/src/imgui-sfml-populate-stamp/imgui-sfml-populate-configure	34a503d7a601c09
+3383	3453	8126777937139992	E:/1/Егор/ФТЛ/Инфа/Оптовый склад(любимый прак)/FRONTik/NovaPochta_r/front/build/_deps/imgui-sfml-subbuild/imgui-sfml-populate-prefix/src/imgui-sfml-populate-stamp/imgui-sfml-populate-configure	34a503d7a601c09
+3453	3522	8126777937822362	imgui-sfml-populate-prefix/src/imgui-sfml-populate-stamp/imgui-sfml-populate-build	e86bcb664aa84a74
+3453	3522	8126777937822362	E:/1/Егор/ФТЛ/Инфа/Оптовый склад(любимый прак)/FRONTik/NovaPochta_r/front/build/_deps/imgui-sfml-subbuild/imgui-sfml-populate-prefix/src/imgui-sfml-populate-stamp/imgui-sfml-populate-build	e86bcb664aa84a74
+3522	3593	8126777938529505	imgui-sfml-populate-prefix/src/imgui-sfml-populate-stamp/imgui-sfml-populate-install	bcbe283fe47c8dfe
+3522	3593	8126777938529505	E:/1/Егор/ФТЛ/Инфа/Оптовый склад(любимый прак)/FRONTik/NovaPochta_r/front/build/_deps/imgui-sfml-subbuild/imgui-sfml-populate-prefix/src/imgui-sfml-populate-stamp/imgui-sfml-populate-install	bcbe283fe47c8dfe
+3593	3663	8126777939221845	imgui-sfml-populate-prefix/src/imgui-sfml-populate-stamp/imgui-sfml-populate-test	8f23546e61a1d492
+3593	3663	8126777939221845	E:/1/Егор/ФТЛ/Инфа/Оптовый склад(любимый прак)/FRONTik/NovaPochta_r/front/build/_deps/imgui-sfml-subbuild/imgui-sfml-populate-prefix/src/imgui-sfml-populate-stamp/imgui-sfml-populate-test	8f23546e61a1d492
+3663	3761	8126777940203226	CMakeFiles/imgui-sfml-populate-complete	745ab1921c6fb151
+3663	3761	8126777940203226	imgui-sfml-populate-prefix/src/imgui-sfml-populate-stamp/imgui-sfml-populate-done	745ab1921c6fb151
+3663	3761	8126777940203226	E:/1/Егор/ФТЛ/Инфа/Оптовый склад(любимый прак)/FRONTik/NovaPochta_r/front/build/_deps/imgui-sfml-subbuild/CMakeFiles/imgui-sfml-populate-complete	745ab1921c6fb151
+3663	3761	8126777940203226	E:/1/Егор/ФТЛ/Инфа/Оптовый склад(любимый прак)/FRONTik/NovaPochta_r/front/build/_deps/imgui-sfml-subbuild/imgui-sfml-populate-prefix/src/imgui-sfml-populate-stamp/imgui-sfml-populate-done	745ab1921c6fb151
