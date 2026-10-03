@@ -74,17 +74,30 @@ void Application::processEvents()
 
 void Application::update()
 {
+    const sf::Time deltaTime =
+        deltaClock_.restart();
+
     ImGui::SFML::Update(
         window_,
-        deltaClock_.restart()
+        deltaTime
     );
 
     if (currentScreen_ == Screen::Start)
     {
         if (startScreen_.draw(settings_))
         {
-            currentScreen_ = Screen::Simulation;
+            currentScreen_ =
+                Screen::Simulation;
         }
+    }
+    else if (
+        currentScreen_ ==
+        Screen::Simulation
+    )
+    {
+        simulationScreen_.update(
+            deltaTime.asSeconds()
+        );
     }
 }
 
