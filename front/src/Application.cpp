@@ -86,10 +86,6 @@ void Application::update()
             currentScreen_ = Screen::Simulation;
         }
     }
-    else if (currentScreen_ == Screen::Simulation)
-    {
-        drawSimulationPlaceholder();
-    }
 }
 
 void Application::render()
@@ -98,39 +94,15 @@ void Application::render()
         sf::Color(25, 25, 28)
     );
 
+    if (currentScreen_ == Screen::Simulation)
+    {
+        simulationScreen_.draw(
+            window_,
+            settings_
+        );
+    }
+
     ImGui::SFML::Render(window_);
 
     window_.display();
-}
-
-void Application::drawSimulationPlaceholder()
-{
-    ImGui::Begin("Simulation");
-
-    ImGui::Text("Simulation started!");
-
-    ImGui::Separator();
-
-    ImGui::Text(
-        "Days: %d",
-        settings_.days
-    );
-
-    ImGui::Text(
-        "Stores: %d",
-        settings_.stores
-    );
-
-    ImGui::Text(
-        "Products: %d",
-        settings_.products
-    );
-
-    ImGui::Spacing();
-
-    ImGui::Text(
-        "Next step: warehouse map"
-    );
-
-    ImGui::End();
 }

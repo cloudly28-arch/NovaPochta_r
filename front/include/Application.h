@@ -1,7 +1,7 @@
 #pragma once
 
 #include <SFML/Graphics.hpp>
-
+#include "ui/SimulationScreen.h"
 #include "ui/StartScreen.h"
 
 class Application
@@ -24,8 +24,6 @@ private:
     void update();
     void render();
 
-    void drawSimulationPlaceholder();
-
 private:
     sf::RenderWindow window_;
     sf::Clock deltaClock_;
@@ -34,4 +32,5 @@ private:
 
     SimulationSettings settings_;
     StartScreen startScreen_;
+    SimulationScreen simulationScreen_;
 };
