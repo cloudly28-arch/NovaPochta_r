@@ -1,0 +1,19 @@
+# Build
+**/build/
+
+# Executables / objects
+*.exe
+*.o
+*.obj
+
+# VS Code
+.vscode/
+
+# CMake temporary files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+build.ninja
+.ninja_deps
+.ninja_log
+imgui.ini

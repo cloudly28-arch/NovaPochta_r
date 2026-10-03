@@ -31,6 +31,14 @@ FetchContent_MakeAvailable(ImGui-SFML)
 
 add_executable(NovaPoshtaWarehouseFrontend
     src/main.cpp
+    src/Application.cpp
+    src/ui/StartScreen.cpp
+)
+
+target_include_directories(
+    NovaPoshtaWarehouseFrontend
+    PRIVATE
+    include
 )
 
 target_link_libraries(NovaPoshtaWarehouseFrontend

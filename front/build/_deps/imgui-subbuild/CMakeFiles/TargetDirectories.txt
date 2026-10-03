@@ -1,3 +1,0 @@
-E:/1/Егор/ФТЛ/Инфа/Оптовый склад(любимый прак)/FRONTik/NovaPochta_r/front/build/_deps/imgui-subbuild/CMakeFiles/imgui-populate.dir
-E:/1/Егор/ФТЛ/Инфа/Оптовый склад(любимый прак)/FRONTik/NovaPochta_r/front/build/_deps/imgui-subbuild/CMakeFiles/edit_cache.dir
-E:/1/Егор/ФТЛ/Инфа/Оптовый склад(любимый прак)/FRONTik/NovaPochta_r/front/build/_deps/imgui-subbuild/CMakeFiles/rebuild_cache.dir
