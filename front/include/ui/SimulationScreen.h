@@ -55,6 +55,10 @@ private:
 
         VehicleDirection direction =
             VehicleDirection::ToStore;
+
+        bool active = false;
+
+        float startDelay = 0.0f;
     };
 
 private:
@@ -73,13 +77,13 @@ private:
 
     void drawStores(sf::RenderWindow& window);
 
-    void drawVehicle(sf::RenderWindow& window);
+    void drawVehicles(sf::RenderWindow& window);
 
     void handleMouseClick(sf::RenderWindow& window);
 
     void drawInfoPanel();
 
-    void updateVehicle(float deltaTime);
+    void updateVehicles(float deltaTime);
 
     sf::Vector2f getStorePosition(int storeId) const;
     
@@ -104,7 +108,7 @@ private:
     SimulationState simulationState_ =
         SimulationState::Stopped;
 
-    VehicleView vehicle_;
+    std::vector<VehicleView> vehicles_;
 
     float simulationSpeed_ = 1.0f;
     sf::Texture warehouseTexture_;

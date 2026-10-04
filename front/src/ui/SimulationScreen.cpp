@@ -12,7 +12,7 @@ void SimulationScreen::update(float deltaTime)
         SimulationState::Running
     )
     {
-        updateVehicle(deltaTime);
+        updateVehicles(deltaTime);
     }
 }
 
@@ -29,7 +29,7 @@ void SimulationScreen::draw(
     drawRoutes(window);
     drawWarehouse(window);
     drawStores(window);
-    drawVehicle(window);
+    drawVehicles(window);
 
     drawTopBar(settings);
     drawBottomBar();
@@ -91,15 +91,31 @@ void SimulationScreen::ensureStoresCreated(
         stores_.push_back(store);
     }
 
-    if (!stores_.empty())
-    {
-        vehicle_.targetStoreId =
-            stores_.front().id;
+    vehicles_.clear();
 
-        vehicle_.position =
-            warehouseCenter_;
+    for (const StoreView& store : stores_)
+    {
+        VehicleView vehicle;
+
+        vehicle.targetStoreId = store.id;
+        vehicle.position = warehouseCenter_;
+        vehicle.progress = 0.0f;
+
+        vehicle.direction =
+            VehicleDirection::ToStore;
+
+        vehicle.active = true;
+
+        vehicle.startDelay =
+            static_cast<float>(
+                store.id - 1
+            ) * 0.7f;
+
+        vehicles_.push_back(vehicle);
     }
 }
+
+
 
 void SimulationScreen::drawTopBar(
     const SimulationSettings& settings
@@ -251,13 +267,21 @@ void SimulationScreen::drawBottomBar()
         simulationState_ =
             SimulationState::Stopped;
 
-        vehicle_.progress = 0.0f;
+        for (VehicleView& vehicle : vehicles_)
+        {
+            vehicle.progress = 0.0f;
 
-        vehicle_.direction =
-            VehicleDirection::ToStore;
+            vehicle.direction =
+                VehicleDirection::ToStore;
 
-        vehicle_.position =
-            warehouseCenter_;
+            vehicle.position =
+                warehouseCenter_;
+
+            vehicle.startDelay =
+                static_cast<float>(
+                    vehicle.targetStoreId - 1
+                ) * 0.7f;
+        }
     }
 
     ImGui::SameLine(400.0f);
@@ -557,168 +581,173 @@ void SimulationScreen::drawStores(
     }
 }
 
-void SimulationScreen::drawVehicle(
+void SimulationScreen::drawVehicles(
     sf::RenderWindow& window
 )
 {
-    const sf::Vector2f storePosition =
-        getStorePosition(
-            vehicle_.targetStoreId
-        );
-
-    sf::Vector2f direction;
-
-    if (
-        vehicle_.direction ==
-        VehicleDirection::ToStore
-    )
+    for (const VehicleView& vehicle : vehicles_)
     {
-        direction =
-            storePosition -
-            warehouseCenter_;
-    }
-    else
-    {
-        direction =
-            warehouseCenter_ -
-            storePosition;
-    }
+        if (!vehicle.active)
+        {
+            continue;
+        }
 
-    const float angle =
-        std::atan2(
-            direction.y,
-            direction.x
-        ) *
-        180.0f /
-        3.14159265f;
+        if (vehicle.startDelay > 0.0f)
+        {
+            continue;
+        }
 
-    if (truckTextureLoaded_)
-    {
-        sf::Sprite truck(
-            truckTexture_
-        );
-
-        const sf::Vector2u textureSize =
-            truckTexture_.getSize();
-
-        truck.setOrigin(
-            sf::Vector2f(
-                textureSize.x / 2.0f,
-                textureSize.y / 2.0f
-            )
-        );
-
-        truck.setPosition(
-            vehicle_.position
-        );
-
-        const float desiredWidth =
-            50.0f;
-
-        const float scale =
-            desiredWidth /
-            static_cast<float>(
-                textureSize.x
+        const sf::Vector2f storePosition =
+            getStorePosition(
+                vehicle.targetStoreId
             );
 
-        truck.setScale(
-            sf::Vector2f(
-                scale,
-                scale
-            )
-        );
-
-        truck.setRotation(
-            sf::degrees(angle)
-        );
+        sf::Vector2f direction;
 
         if (
-            vehicle_.direction ==
+            vehicle.direction ==
             VehicleDirection::ToStore
         )
         {
-            truck.setColor(
-                sf::Color(
-                    120,
-                    255,
-                    150
-                )
-            );
+            direction =
+                storePosition -
+                warehouseCenter_;
         }
         else
         {
-            truck.setColor(
-                sf::Color(
-                    130,
-                    180,
-                    255
-                )
-            );
+            direction =
+                warehouseCenter_ -
+                storePosition;
         }
 
-        window.draw(truck);
-    }
-    else
-    {
-        sf::RectangleShape vehicle(
-            sf::Vector2f(
-                35.0f,
-                20.0f
-            )
-        );
+        const float angle =
+            std::atan2(
+                direction.y,
+                direction.x
+            ) *
+            180.0f /
+            3.14159265f;
 
-        vehicle.setOrigin(
-            sf::Vector2f(
-                17.5f,
-                10.0f
-            )
-        );
-
-        vehicle.setPosition(
-            vehicle_.position
-        );
-
-        vehicle.setRotation(
-            sf::degrees(angle)
-        );
-
-        if (
-            vehicle_.direction ==
-            VehicleDirection::ToStore
-        )
+        if (truckTextureLoaded_)
         {
-            vehicle.setFillColor(
-                sf::Color(
-                    40,
-                    190,
-                    90
+            sf::Sprite truck(
+                truckTexture_
+            );
+
+            const sf::Vector2u textureSize =
+                truckTexture_.getSize();
+
+            truck.setOrigin(
+                sf::Vector2f(
+                    textureSize.x / 2.0f,
+                    textureSize.y / 2.0f
                 )
             );
+
+            truck.setPosition(
+                vehicle.position
+            );
+
+            const float desiredWidth =
+                45.0f;
+
+            const float scale =
+                desiredWidth /
+                static_cast<float>(
+                    textureSize.x
+                );
+
+            truck.setScale(
+                sf::Vector2f(
+                    scale,
+                    scale
+                )
+            );
+
+            truck.setRotation(
+                sf::degrees(angle)
+            );
+
+            if (
+                vehicle.direction ==
+                VehicleDirection::ToStore
+            )
+            {
+                truck.setColor(
+                    sf::Color(
+                        120,
+                        255,
+                        150
+                    )
+                );
+            }
+            else
+            {
+                truck.setColor(
+                    sf::Color(
+                        140,
+                        190,
+                        255
+                    )
+                );
+            }
+
+            window.draw(truck);
         }
         else
         {
-            vehicle.setFillColor(
-                sf::Color(
-                    70,
-                    130,
-                    230
+            sf::RectangleShape shape(
+                sf::Vector2f(
+                    35.0f,
+                    20.0f
                 )
             );
+
+            shape.setOrigin(
+                sf::Vector2f(
+                    17.5f,
+                    10.0f
+                )
+            );
+
+            shape.setPosition(
+                vehicle.position
+            );
+
+            shape.setRotation(
+                sf::degrees(angle)
+            );
+
+            if (
+                vehicle.direction ==
+                VehicleDirection::ToStore
+            )
+            {
+                shape.setFillColor(
+                    sf::Color(
+                        40,
+                        190,
+                        90
+                    )
+                );
+            }
+            else
+            {
+                shape.setFillColor(
+                    sf::Color(
+                        70,
+                        130,
+                        230
+                    )
+                );
+            }
+
+            window.draw(shape);
         }
-
-        vehicle.setOutlineThickness(
-            2.0f
-        );
-
-        vehicle.setOutlineColor(
-            sf::Color::White
-        );
-
-        window.draw(vehicle);
     }
 }
 
-void SimulationScreen::updateVehicle(
+void SimulationScreen::updateVehicles(
     float deltaTime
 )
 {
@@ -727,69 +756,75 @@ void SimulationScreen::updateVehicle(
         return;
     }
 
-    const sf::Vector2f storePosition =
-        getStorePosition(
-            vehicle_.targetStoreId
-        );
-
-    const float movementSpeed =
-        0.20f * simulationSpeed_;
-
-    vehicle_.progress +=
-        movementSpeed * deltaTime;
-
-    if (vehicle_.progress >= 1.0f)
+    for (VehicleView& vehicle : vehicles_)
     {
-        vehicle_.progress = 0.0f;
+        if (!vehicle.active)
+        {
+            continue;
+        }
+
+        if (vehicle.startDelay > 0.0f)
+        {
+            vehicle.startDelay -=
+                deltaTime * simulationSpeed_;
+
+            continue;
+        }
+
+        const sf::Vector2f storePosition =
+            getStorePosition(
+                vehicle.targetStoreId
+            );
+
+        const float movementSpeed =
+            0.20f * simulationSpeed_;
+
+        vehicle.progress +=
+            movementSpeed * deltaTime;
+
+        if (vehicle.progress >= 1.0f)
+        {
+            vehicle.progress = 0.0f;
+
+            if (
+                vehicle.direction ==
+                VehicleDirection::ToStore
+            )
+            {
+                vehicle.direction =
+                    VehicleDirection::ToWarehouse;
+            }
+            else
+            {
+                vehicle.direction =
+                    VehicleDirection::ToStore;
+
+                vehicle.startDelay = 1.0f;
+            }
+        }
+
+        sf::Vector2f start;
+        sf::Vector2f end;
 
         if (
-            vehicle_.direction ==
+            vehicle.direction ==
             VehicleDirection::ToStore
         )
         {
-            vehicle_.direction =
-                VehicleDirection::ToWarehouse;
+            start = warehouseCenter_;
+            end = storePosition;
         }
         else
         {
-            vehicle_.direction =
-                VehicleDirection::ToStore;
-
-            vehicle_.targetStoreId++;
-
-            if (
-                vehicle_.targetStoreId >
-                static_cast<int>(
-                    stores_.size()
-                )
-            )
-            {
-                vehicle_.targetStoreId = 1;
-            }
+            start = storePosition;
+            end = warehouseCenter_;
         }
-    }
 
-    sf::Vector2f start;
-    sf::Vector2f end;
-
-    if (
-        vehicle_.direction ==
-        VehicleDirection::ToStore
-    )
-    {
-        start = warehouseCenter_;
-        end = storePosition;
+        vehicle.position =
+            start +
+            (end - start) *
+            vehicle.progress;
     }
-    else
-    {
-        start = storePosition;
-        end = warehouseCenter_;
-    }
-
-    vehicle_.position =
-        start +
-        (end - start) *
-        vehicle_.progress;
 }
 
 sf::Vector2f
@@ -1046,36 +1081,34 @@ void SimulationScreen::loadTextures()
 
     texturesLoaded_ = true;
 
+    const auto warehousePath =
+        assetsPath_ / "textures" / "warehouse.png";
+
+    const auto storePath =
+        assetsPath_ / "textures" / "store.png";
+
+    const auto truckPath =
+        assetsPath_ / "textures" / "truck.png";
+
     warehouseTextureLoaded_ =
         warehouseTexture_.loadFromFile(
-            "assets/textures/warehouse.png"
+            warehousePath.string()
         );
 
     storeTextureLoaded_ =
         storeTexture_.loadFromFile(
-            "assets/textures/store.png"
+            storePath.string()
         );
 
     truckTextureLoaded_ =
         truckTexture_.loadFromFile(
-            "assets/textures/truck.png"
+            truckPath.string()
         );
+}
 
-    if (!warehouseTextureLoaded_)
-    {
-        std::cout
-            << "warehouse.png not found - using fallback\n";
-    }
-
-    if (!storeTextureLoaded_)
-    {
-        std::cout
-            << "store.png not found - using fallback\n";
-    }
-
-    if (!truckTextureLoaded_)
-    {
-        std::cout
-            << "truck.png not found - using fallback\n";
-    }
+void SimulationScreen::setAssetsPath(
+    const std::filesystem::path& path
+)
+{
+    assetsPath_ = path;
 }
