@@ -15,6 +15,9 @@ public:
         const SimulationSettings& settings
     );
     void setAssetsPath(const std::filesystem::path& path);
+    void configure(
+        const SimulationSettings& settings
+    );
 
 private:
       
@@ -29,7 +32,8 @@ private:
     {
         Stopped,
         Running,
-        Paused
+        Paused,
+        Finished
     };
 
     enum class VehicleDirection
@@ -86,6 +90,7 @@ private:
     void updateVehicles(float deltaTime);
 
     sf::Vector2f getStorePosition(int storeId) const;
+    void advanceDay();
     
 
 private:
@@ -111,6 +116,13 @@ private:
     std::vector<VehicleView> vehicles_;
 
     float simulationSpeed_ = 1.0f;
+    int currentDay_ = 1;
+    int totalDays_ = 20;
+
+    float dayTimer_ = 0.0f;
+
+    // Сколько реальных секунд длится один модельный день.
+    float secondsPerDay_ = 8.0f;
     sf::Texture warehouseTexture_;
     sf::Texture storeTexture_;
     sf::Texture truckTexture_;

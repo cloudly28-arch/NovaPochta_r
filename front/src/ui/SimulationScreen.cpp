@@ -8,11 +8,23 @@
 void SimulationScreen::update(float deltaTime)
 {
     if (
-        simulationState_ ==
+        simulationState_ !=
         SimulationState::Running
     )
     {
-        updateVehicles(deltaTime);
+        return;
+    }
+
+    updateVehicles(deltaTime);
+
+    dayTimer_ +=
+        deltaTime * simulationSpeed_;
+
+    if (dayTimer_ >= secondsPerDay_)
+    {
+        dayTimer_ -= secondsPerDay_;
+
+        advanceDay();
     }
 }
 
@@ -151,8 +163,9 @@ void SimulationScreen::drawTopBar(
     ImGui::SameLine(280.0f);
 
     ImGui::Text(
-        "Day: 1 / %d",
-        settings.days
+        "Day: %d / %d",
+        currentDay_,
+        totalDays_
     );
 
     ImGui::SameLine(450.0f);
@@ -184,6 +197,13 @@ void SimulationScreen::drawTopBar(
     )
     {
         ImGui::Text("Status: PAUSED");
+    }
+    else if (
+        simulationState_ ==
+        SimulationState::Finished
+    )
+    {
+        ImGui::Text("Status: FINISHED");
     }
     else
     {
@@ -232,6 +252,34 @@ void SimulationScreen::drawBottomBar()
         )
     )
     {
+        if (
+            simulationState_ ==
+            SimulationState::Finished
+        )
+        {
+            currentDay_ = 1;
+            dayTimer_ = 0.0f;
+
+            for (
+                VehicleView& vehicle :
+                vehicles_
+            )
+            {
+                vehicle.progress = 0.0f;
+
+                vehicle.position =
+                    warehouseCenter_;
+
+                vehicle.direction =
+                    VehicleDirection::ToStore;
+
+                vehicle.startDelay =
+                    static_cast<float>(
+                        vehicle.targetStoreId - 1
+                    ) * 0.7f;
+            }
+        }
+
         simulationState_ =
             SimulationState::Running;
     }
@@ -266,6 +314,8 @@ void SimulationScreen::drawBottomBar()
     {
         simulationState_ =
             SimulationState::Stopped;
+        currentDay_ = 1;
+        dayTimer_ = 0.0f;
 
         for (VehicleView& vehicle : vehicles_)
         {
@@ -321,6 +371,22 @@ void SimulationScreen::drawBottomBar()
     ImGui::Text(
         "Current speed: %.0fx",
         simulationSpeed_
+    );
+    ImGui::SameLine(900.0f);
+
+    float dayProgress =
+        dayTimer_ / secondsPerDay_;
+
+    dayProgress =
+        std::clamp(
+            dayProgress,
+            0.0f,
+            1.0f
+        );
+
+    ImGui::ProgressBar(
+        dayProgress,
+        ImVec2(200.0f, 20.0f)
     );
 
     ImGui::End();
@@ -1111,4 +1177,34 @@ void SimulationScreen::setAssetsPath(
 )
 {
     assetsPath_ = path;
+}
+
+void SimulationScreen::configure(
+    const SimulationSettings& settings
+)
+{
+    totalDays_ = settings.days;
+
+    currentDay_ = 1;
+    dayTimer_ = 0.0f;
+
+    simulationSpeed_ = 1.0f;
+
+    simulationState_ =
+        SimulationState::Stopped;
+}
+void SimulationScreen::advanceDay()
+{
+    if (currentDay_ >= totalDays_)
+    {
+        simulationState_ =
+            SimulationState::Finished;
+
+        dayTimer_ = 0.0f;
+
+        return;
+    }
+
+    currentDay_++;
+
 }

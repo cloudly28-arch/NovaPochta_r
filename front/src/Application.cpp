@@ -107,6 +107,10 @@ void Application::update()
     {
         if (startScreen_.draw(settings_))
         {
+            simulationScreen_.configure(
+                settings_
+            );
+
             currentScreen_ =
                 Screen::Simulation;
         }
