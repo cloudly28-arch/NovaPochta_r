@@ -2,7 +2,7 @@
 
 #include <SFML/Graphics.hpp>
 #include <vector>
-
+#include <filesystem>
 #include "ui/StartScreen.h"
 
 class SimulationScreen
@@ -14,8 +14,10 @@ public:
         sf::RenderWindow& window,
         const SimulationSettings& settings
     );
+    void setAssetsPath(const std::filesystem::path& path);
 
 private:
+      
     enum class SelectedObjectType
     {
         None,
@@ -56,6 +58,7 @@ private:
     };
 
 private:
+    void loadTextures();  
     void ensureStoresCreated(int storeCount);
 
     void drawTopBar(
@@ -79,6 +82,7 @@ private:
     void updateVehicle(float deltaTime);
 
     sf::Vector2f getStorePosition(int storeId) const;
+    
 
 private:
     std::vector<StoreView> stores_;
@@ -103,4 +107,14 @@ private:
     VehicleView vehicle_;
 
     float simulationSpeed_ = 1.0f;
+    sf::Texture warehouseTexture_;
+    sf::Texture storeTexture_;
+    sf::Texture truckTexture_;
+
+    bool warehouseTextureLoaded_ = false;
+    bool storeTextureLoaded_ = false;
+    bool truckTextureLoaded_ = false;
+
+    bool texturesLoaded_ = false;
+    std::filesystem::path assetsPath_;
 };

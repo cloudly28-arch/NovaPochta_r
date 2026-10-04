@@ -50,3 +50,12 @@ target_link_libraries(NovaPoshtaWarehouseFrontend
     SFML::System
     ImGui-SFML::ImGui-SFML
 )
+
+add_custom_command(
+    TARGET NovaPoshtaWarehouseFrontend
+    POST_BUILD
+
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_CURRENT_SOURCE_DIR}/assets
+        $<TARGET_FILE_DIR:NovaPoshtaWarehouseFrontend>/assets
+)

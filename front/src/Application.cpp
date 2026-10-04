@@ -2,6 +2,21 @@
 
 #include <imgui.h>
 #include <imgui-SFML.h>
+#include <filesystem>
+#include <windows.h>
+
+static std::filesystem::path getExecutableDirectory()
+{
+    wchar_t buffer[MAX_PATH];
+
+    GetModuleFileNameW(
+        nullptr,
+        buffer,
+        MAX_PATH
+    );
+
+    return std::filesystem::path(buffer).parent_path();
+}
 
 Application::Application()
     : window_(
@@ -10,6 +25,12 @@ Application::Application()
     )
 {
     window_.setFramerateLimit(60);
+    const auto exeDirectory =
+    getExecutableDirectory();
+
+    simulationScreen_.setAssetsPath(
+        exeDirectory / "assets"
+    );
 
     if (!ImGui::SFML::Init(window_))
     {
@@ -107,7 +128,10 @@ void Application::render()
         sf::Color(25, 25, 28)
     );
 
-    if (currentScreen_ == Screen::Simulation)
+    if (
+        currentScreen_ ==
+        Screen::Simulation
+    )
     {
         simulationScreen_.draw(
             window_,

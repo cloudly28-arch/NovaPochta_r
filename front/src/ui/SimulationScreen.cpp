@@ -1,7 +1,7 @@
 #include "ui/SimulationScreen.h"
 
 #include <imgui.h>
-
+#include <iostream>
 #include <cmath>
 #include <algorithm>
 
@@ -21,6 +21,7 @@ void SimulationScreen::draw(
     const SimulationSettings& settings
 )
 {
+    loadTextures();
     ensureStoresCreated(settings.stores);
 
     handleMouseClick(window);
@@ -349,53 +350,86 @@ void SimulationScreen::drawWarehouse(
     );
 
     const sf::Vector2f position(
-        warehouseCenter_.x -
-            size.x / 2.0f,
-
-        warehouseCenter_.y -
-            size.y / 2.0f
+        warehouseCenter_.x - size.x / 2.0f,
+        warehouseCenter_.y - size.y / 2.0f
     );
 
-    sf::RectangleShape warehouse(size);
-
-    warehouse.setPosition(position);
-
-    warehouse.setFillColor(
-        sf::Color(
-            170,
-            20,
-            30
-        )
-    );
-
-    warehouse.setOutlineThickness(
-        4.0f
-    );
-
-    if (
-        selectedType_ ==
-        SelectedObjectType::Warehouse
-    )
+    if (warehouseTextureLoaded_)
     {
-        warehouse.setOutlineColor(
-            sf::Color(
-                255,
-                200,
-                40
+        sf::Sprite warehouse(warehouseTexture_);
+
+        const sf::Vector2u textureSize =
+            warehouseTexture_.getSize();
+
+        warehouse.setOrigin(
+            sf::Vector2f(
+                textureSize.x / 2.0f,
+                textureSize.y / 2.0f
             )
         );
+
+        warehouse.setPosition(
+            warehouseCenter_
+        );
+
+        warehouse.setScale(
+            sf::Vector2f(
+                size.x /
+                    static_cast<float>(textureSize.x),
+
+                size.y /
+                    static_cast<float>(textureSize.y)
+            )
+        );
+
+        window.draw(warehouse);
+
+        warehouseBounds_ =
+            warehouse.getGlobalBounds();
     }
     else
     {
-        warehouse.setOutlineColor(
-            sf::Color::White
+        sf::RectangleShape warehouse(size);
+
+        warehouse.setPosition(position);
+
+        warehouse.setFillColor(
+            sf::Color(
+                170,
+                20,
+                30
+            )
         );
+
+        warehouse.setOutlineThickness(
+            4.0f
+        );
+
+        if (
+            selectedType_ ==
+            SelectedObjectType::Warehouse
+        )
+        {
+            warehouse.setOutlineColor(
+                sf::Color(
+                    255,
+                    200,
+                    40
+                )
+            );
+        }
+        else
+        {
+            warehouse.setOutlineColor(
+                sf::Color::White
+            );
+        }
+
+        window.draw(warehouse);
+
+        warehouseBounds_ =
+            warehouse.getGlobalBounds();
     }
-
-    window.draw(warehouse);
-
-    warehouseBounds_ =
-        warehouse.getGlobalBounds();
 }
 
 void SimulationScreen::drawStores(
@@ -407,62 +441,119 @@ void SimulationScreen::drawStores(
         stores_
     )
     {
-        sf::RectangleShape store(
-            sf::Vector2f(
-                80.0f,
-                60.0f
-            )
+        const sf::Vector2f size(
+            80.0f,
+            60.0f
         );
 
-        store.setPosition(
-            sf::Vector2f(
-                storeView.position.x -
-                    40.0f,
-
-                storeView.position.y -
-                    30.0f
-            )
-        );
-
-        if (
-            selectedType_ ==
-                SelectedObjectType::Store &&
-            selectedStoreId_ ==
-                storeView.id
-        )
+        if (storeTextureLoaded_)
         {
-            store.setFillColor(
-                sf::Color(
-                    230,
-                    180,
-                    40
+            sf::Sprite store(
+                storeTexture_
+            );
+
+            const sf::Vector2u textureSize =
+                storeTexture_.getSize();
+
+            store.setOrigin(
+                sf::Vector2f(
+                    textureSize.x / 2.0f,
+                    textureSize.y / 2.0f
                 )
             );
+
+            store.setPosition(
+                storeView.position
+            );
+
+            store.setScale(
+                sf::Vector2f(
+                    size.x /
+                        static_cast<float>(
+                            textureSize.x
+                        ),
+
+                    size.y /
+                        static_cast<float>(
+                            textureSize.y
+                        )
+                )
+            );
+
+            if (
+                selectedType_ ==
+                    SelectedObjectType::Store &&
+                selectedStoreId_ ==
+                    storeView.id
+            )
+            {
+                store.setColor(
+                    sf::Color(
+                        255,
+                        220,
+                        120
+                    )
+                );
+            }
+
+            window.draw(store);
         }
         else
         {
-            store.setFillColor(
-                sf::Color(
-                    220,
-                    220,
-                    220
+            sf::RectangleShape store(
+                size
+            );
+
+            store.setPosition(
+                sf::Vector2f(
+                    storeView.position.x -
+                        size.x / 2.0f,
+
+                    storeView.position.y -
+                        size.y / 2.0f
                 )
             );
-        }
 
-        store.setOutlineThickness(
-            2.0f
-        );
-
-        store.setOutlineColor(
-            sf::Color(
-                120,
-                120,
-                120
+            if (
+                selectedType_ ==
+                    SelectedObjectType::Store &&
+                selectedStoreId_ ==
+                    storeView.id
             )
-        );
+            {
+                store.setFillColor(
+                    sf::Color(
+                        230,
+                        180,
+                        40
+                    )
+                );
+            }
+            else
+            {
+                store.setFillColor(
+                    sf::Color(
+                        220,
+                        220,
+                        220
+                    )
+                );
+            }
 
-        window.draw(store);
+            store.setOutlineThickness(
+                2.0f
+            );
+
+            store.setOutlineColor(
+                sf::Color(
+                    120,
+                    120,
+                    120
+                )
+            );
+
+            window.draw(store);
+        }
     }
 }
 
@@ -470,57 +561,161 @@ void SimulationScreen::drawVehicle(
     sf::RenderWindow& window
 )
 {
-    sf::RectangleShape vehicle(
-        sf::Vector2f(
-            35.0f,
-            20.0f
-        )
-    );
+    const sf::Vector2f storePosition =
+        getStorePosition(
+            vehicle_.targetStoreId
+        );
 
-    vehicle.setOrigin(
-        sf::Vector2f(
-            17.5f,
-            10.0f
-        )
-    );
-
-    vehicle.setPosition(
-        vehicle_.position
-    );
+    sf::Vector2f direction;
 
     if (
         vehicle_.direction ==
         VehicleDirection::ToStore
     )
     {
-        vehicle.setFillColor(
-            sf::Color(
-                40,
-                190,
-                90
-            )
-        );
+        direction =
+            storePosition -
+            warehouseCenter_;
     }
     else
     {
-        vehicle.setFillColor(
-            sf::Color(
-                70,
-                130,
-                230
-            )
-        );
+        direction =
+            warehouseCenter_ -
+            storePosition;
     }
 
-    vehicle.setOutlineThickness(
-        2.0f
-    );
+    const float angle =
+        std::atan2(
+            direction.y,
+            direction.x
+        ) *
+        180.0f /
+        3.14159265f;
 
-    vehicle.setOutlineColor(
-        sf::Color::White
-    );
+    if (truckTextureLoaded_)
+    {
+        sf::Sprite truck(
+            truckTexture_
+        );
 
-    window.draw(vehicle);
+        const sf::Vector2u textureSize =
+            truckTexture_.getSize();
+
+        truck.setOrigin(
+            sf::Vector2f(
+                textureSize.x / 2.0f,
+                textureSize.y / 2.0f
+            )
+        );
+
+        truck.setPosition(
+            vehicle_.position
+        );
+
+        const float desiredWidth =
+            50.0f;
+
+        const float scale =
+            desiredWidth /
+            static_cast<float>(
+                textureSize.x
+            );
+
+        truck.setScale(
+            sf::Vector2f(
+                scale,
+                scale
+            )
+        );
+
+        truck.setRotation(
+            sf::degrees(angle)
+        );
+
+        if (
+            vehicle_.direction ==
+            VehicleDirection::ToStore
+        )
+        {
+            truck.setColor(
+                sf::Color(
+                    120,
+                    255,
+                    150
+                )
+            );
+        }
+        else
+        {
+            truck.setColor(
+                sf::Color(
+                    130,
+                    180,
+                    255
+                )
+            );
+        }
+
+        window.draw(truck);
+    }
+    else
+    {
+        sf::RectangleShape vehicle(
+            sf::Vector2f(
+                35.0f,
+                20.0f
+            )
+        );
+
+        vehicle.setOrigin(
+            sf::Vector2f(
+                17.5f,
+                10.0f
+            )
+        );
+
+        vehicle.setPosition(
+            vehicle_.position
+        );
+
+        vehicle.setRotation(
+            sf::degrees(angle)
+        );
+
+        if (
+            vehicle_.direction ==
+            VehicleDirection::ToStore
+        )
+        {
+            vehicle.setFillColor(
+                sf::Color(
+                    40,
+                    190,
+                    90
+                )
+            );
+        }
+        else
+        {
+            vehicle.setFillColor(
+                sf::Color(
+                    70,
+                    130,
+                    230
+                )
+            );
+        }
+
+        vehicle.setOutlineThickness(
+            2.0f
+        );
+
+        vehicle.setOutlineColor(
+            sf::Color::White
+        );
+
+        window.draw(vehicle);
+    }
 }
 
 void SimulationScreen::updateVehicle(
@@ -840,4 +1035,47 @@ void SimulationScreen::drawInfoPanel()
     }
 
     ImGui::End();
+}
+
+void SimulationScreen::loadTextures()
+{
+    if (texturesLoaded_)
+    {
+        return;
+    }
+
+    texturesLoaded_ = true;
+
+    warehouseTextureLoaded_ =
+        warehouseTexture_.loadFromFile(
+            "assets/textures/warehouse.png"
+        );
+
+    storeTextureLoaded_ =
+        storeTexture_.loadFromFile(
+            "assets/textures/store.png"
+        );
+
+    truckTextureLoaded_ =
+        truckTexture_.loadFromFile(
+            "assets/textures/truck.png"
+        );
+
+    if (!warehouseTextureLoaded_)
+    {
+        std::cout
+            << "warehouse.png not found - using fallback\n";
+    }
+
+    if (!storeTextureLoaded_)
+    {
+        std::cout
+            << "store.png not found - using fallback\n";
+    }
+
+    if (!truckTextureLoaded_)
+    {
+        std::cout
+            << "truck.png not found - using fallback\n";
+    }
 }
