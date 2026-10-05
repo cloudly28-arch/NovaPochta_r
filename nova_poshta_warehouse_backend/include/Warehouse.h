@@ -2,16 +2,15 @@
 
 #include <string>
 #include <vector>
-
-#include "Worker.h"
-#include "Store.h"
-#include "Product.h"
-#include "StorageCell.h"
-#include "WarehouseZone.h"
-#include "InventoryRecord.h"
-#include "Order.h"
-#include "WarehouseTask.h"
-#include "Vehicle.h"
+#include "domain/InventoryRecord.h"
+#include "domain/Order.h"
+#include "domain/Product.h"
+#include "domain/StorageCell.h"
+#include "domain/Store.h"
+#include "domain/Vehicle.h"
+#include "domain/WarehouseTask.h"
+#include "domain/WarehouseZone.h"
+#include "domain/Worker.h"
 
 class Warehouse {
 private:
@@ -31,16 +30,21 @@ private:
 
 public:
     Warehouse() = default;
-
-    Warehouse(
-        int id,
-        const std::string& name,
-        const std::string& address
-    );
+    Warehouse(int id, std::string name, std::string address = {});
 
     int getId() const;
     const std::string& getName() const;
     const std::string& getAddress() const;
+
+    std::vector<Worker>& getWorkers();
+    std::vector<Store>& getStores();
+    std::vector<Product>& getProducts();
+    std::vector<StorageCell>& getStorageCells();
+    std::vector<WarehouseZone>& getZones();
+    std::vector<InventoryRecord>& getInventory();
+    std::vector<Order>& getOrders();
+    std::vector<WarehouseTask>& getTasks();
+    std::vector<Vehicle>& getVehicles();
 
     const std::vector<Worker>& getWorkers() const;
     const std::vector<Store>& getStores() const;

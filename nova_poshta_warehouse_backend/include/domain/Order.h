@@ -2,8 +2,8 @@
 
 #include <string>
 #include <vector>
-#include "Types.h"
-#include "OrderItem.h"
+#include "domain/OrderItem.h"
+#include "domain/Types.h"
 
 class Order {
 private:
@@ -15,7 +15,7 @@ private:
 
 public:
     Order() = default;
-    Order(int id, int storeId, const std::string& createdAt);
+    Order(int id, int storeId, std::string createdAt = {});
 
     int getId() const;
     int getStoreId() const;

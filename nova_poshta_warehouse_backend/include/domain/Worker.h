@@ -1,8 +1,8 @@
 #pragma once
 
 #include <string>
-#include "Types.h"
-#include "Position.h"
+#include "domain/Position.h"
+#include "domain/Types.h"
 
 class Worker {
 private:
@@ -10,12 +10,12 @@ private:
     std::string fullName_;
     WorkerRole role_{WorkerRole::Loader};
     WorkerStatus status_{WorkerStatus::Free};
-    Position position_;
+    Position position_{};
     int currentTaskId_{-1};
 
 public:
     Worker() = default;
-    Worker(int id, const std::string& fullName, WorkerRole role);
+    Worker(int id, std::string fullName, WorkerRole role);
 
     int getId() const;
     const std::string& getFullName() const;

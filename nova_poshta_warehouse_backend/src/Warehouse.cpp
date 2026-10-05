@@ -1,6 +1,4 @@
 #include "Warehouse.h"
-
-#include <sstream>
 #include <stdexcept>
 #include <utility>
 
@@ -14,109 +12,42 @@ int Warehouse::getId() const { return id_; }
 const std::string& Warehouse::getName() const { return name_; }
 const std::string& Warehouse::getAddress() const { return address_; }
 
-void Warehouse::addWorker(const Worker& worker) {
-    if (findWorkerById(worker.getId())) throw std::invalid_argument("Worker with this id already exists");
-    workers_.push_back(worker);
-}
-
-void Warehouse::addStore(const Store& store) {
-    if (findStoreById(store.getId())) throw std::invalid_argument("Store with this id already exists");
-    stores_.push_back(store);
-}
-
-void Warehouse::addProduct(const Product& product) {
-    if (findProductById(product.getId())) throw std::invalid_argument("Product with this id already exists");
-    products_.push_back(product);
-}
-
-void Warehouse::addInventoryItem(const InventoryItem& item) {
-    if (!findProductById(item.getProductId())) {
-        throw std::invalid_argument("Cannot add inventory for unknown product");
-    }
-    if (findInventoryByProductId(item.getProductId())) {
-        throw std::invalid_argument("Inventory item for this product already exists");
-    }
-    inventory_.push_back(item);
-}
-
-void Warehouse::addOrder(const Order& order) {
-    if (findOrderById(order.getId())) throw std::invalid_argument("Order with this id already exists");
-    if (!findStoreById(order.getStoreId())) throw std::invalid_argument("Order references unknown store");
-    orders_.push_back(order);
-}
-
-Worker* Warehouse::findWorkerById(int id) {
-    for (auto& worker : workers_) if (worker.getId() == id) return &worker;
-    return nullptr;
-}
-
-Store* Warehouse::findStoreById(int id) {
-    for (auto& store : stores_) if (store.getId() == id) return &store;
-    return nullptr;
-}
-
-Product* Warehouse::findProductById(int id) {
-    for (auto& product : products_) if (product.getId() == id) return &product;
-    return nullptr;
-}
-
-InventoryItem* Warehouse::findInventoryByProductId(int productId) {
-    for (auto& item : inventory_) if (item.getProductId() == productId) return &item;
-    return nullptr;
-}
-
-Order* Warehouse::findOrderById(int id) {
-    for (auto& order : orders_) if (order.getId() == id) return &order;
-    return nullptr;
-}
+std::vector<Worker>& Warehouse::getWorkers() { return workers_; }
+std::vector<Store>& Warehouse::getStores() { return stores_; }
+std::vector<Product>& Warehouse::getProducts() { return products_; }
+std::vector<StorageCell>& Warehouse::getStorageCells() { return storageCells_; }
+std::vector<WarehouseZone>& Warehouse::getZones() { return zones_; }
+std::vector<InventoryRecord>& Warehouse::getInventory() { return inventory_; }
+std::vector<Order>& Warehouse::getOrders() { return orders_; }
+std::vector<WarehouseTask>& Warehouse::getTasks() { return tasks_; }
+std::vector<Vehicle>& Warehouse::getVehicles() { return vehicles_; }
 
 const std::vector<Worker>& Warehouse::getWorkers() const { return workers_; }
 const std::vector<Store>& Warehouse::getStores() const { return stores_; }
 const std::vector<Product>& Warehouse::getProducts() const { return products_; }
-const std::vector<InventoryItem>& Warehouse::getInventory() const { return inventory_; }
+const std::vector<StorageCell>& Warehouse::getStorageCells() const { return storageCells_; }
+const std::vector<WarehouseZone>& Warehouse::getZones() const { return zones_; }
+const std::vector<InventoryRecord>& Warehouse::getInventory() const { return inventory_; }
 const std::vector<Order>& Warehouse::getOrders() const { return orders_; }
+const std::vector<WarehouseTask>& Warehouse::getTasks() const { return tasks_; }
+const std::vector<Vehicle>& Warehouse::getVehicles() const { return vehicles_; }
 
-bool Warehouse::receiveProduct(int productId, int quantity, const std::string& locationCode) {
-    if (quantity <= 0 || !findProductById(productId)) return false;
+void Warehouse::addWorker(const Worker& v) { if (findWorkerById(v.getId())) throw std::invalid_argument("Duplicate worker id"); workers_.push_back(v); }
+void Warehouse::addStore(const Store& v) { if (findStoreById(v.getId())) throw std::invalid_argument("Duplicate store id"); stores_.push_back(v); }
+void Warehouse::addProduct(const Product& v) { if (findProductById(v.getId())) throw std::invalid_argument("Duplicate product id"); products_.push_back(v); }
+void Warehouse::addStorageCell(const StorageCell& v) { if (findStorageCellById(v.getId())) throw std::invalid_argument("Duplicate cell id"); storageCells_.push_back(v); }
+void Warehouse::addZone(const WarehouseZone& v) { if (findZoneById(v.getId())) throw std::invalid_argument("Duplicate zone id"); zones_.push_back(v); }
+void Warehouse::addInventoryRecord(const InventoryRecord& v) { if (findInventoryRecordById(v.getId())) throw std::invalid_argument("Duplicate inventory id"); inventory_.push_back(v); }
+void Warehouse::addOrder(const Order& v) { if (findOrderById(v.getId())) throw std::invalid_argument("Duplicate order id"); orders_.push_back(v); }
+void Warehouse::addTask(const WarehouseTask& v) { if (findTaskById(v.getId())) throw std::invalid_argument("Duplicate task id"); tasks_.push_back(v); }
+void Warehouse::addVehicle(const Vehicle& v) { if (findVehicleById(v.getId())) throw std::invalid_argument("Duplicate vehicle id"); vehicles_.push_back(v); }
 
-    auto* inventoryItem = findInventoryByProductId(productId);
-    if (inventoryItem) {
-        inventoryItem->addQuantity(quantity);
-        if (!locationCode.empty()) inventoryItem->setLocationCode(locationCode);
-    } else {
-        inventory_.emplace_back(productId, quantity, locationCode);
-    }
-    return true;
-}
-
-bool Warehouse::reserveAndConfirmOrder(int orderId) {
-    auto* order = findOrderById(orderId);
-    if (!order || order->getStatus() != OrderStatus::Created) return false;
-
-    for (const auto& item : order->getItems()) {
-        auto* stock = findInventoryByProductId(item.getProductId());
-        if (!stock || stock->getQuantity() < item.getQuantity()) return false;
-    }
-
-    for (const auto& item : order->getItems()) {
-        auto* stock = findInventoryByProductId(item.getProductId());
-        stock->removeQuantity(item.getQuantity());
-    }
-
-    order->setStatus(OrderStatus::Confirmed);
-    return true;
-}
-
-std::string Warehouse::toString() const {
-    std::ostringstream out;
-    out << "Warehouse{id=" << id_
-        << ", name='" << name_ << "'"
-        << ", address='" << address_ << "'"
-        << ", workers=" << workers_.size()
-        << ", stores=" << stores_.size()
-        << ", products=" << products_.size()
-        << ", inventoryPositions=" << inventory_.size()
-        << ", orders=" << orders_.size()
-        << "}";
-    return out.str();
-}
+Worker* Warehouse::findWorkerById(int id) { for (auto& v : workers_) if (v.getId() == id) return &v; return nullptr; }
+Store* Warehouse::findStoreById(int id) { for (auto& v : stores_) if (v.getId() == id) return &v; return nullptr; }
+Product* Warehouse::findProductById(int id) { for (auto& v : products_) if (v.getId() == id) return &v; return nullptr; }
+StorageCell* Warehouse::findStorageCellById(int id) { for (auto& v : storageCells_) if (v.getId() == id) return &v; return nullptr; }
+WarehouseZone* Warehouse::findZoneById(int id) { for (auto& v : zones_) if (v.getId() == id) return &v; return nullptr; }
+InventoryRecord* Warehouse::findInventoryRecordById(int id) { for (auto& v : inventory_) if (v.getId() == id) return &v; return nullptr; }
+Order* Warehouse::findOrderById(int id) { for (auto& v : orders_) if (v.getId() == id) return &v; return nullptr; }
+WarehouseTask* Warehouse::findTaskById(int id) { for (auto& v : tasks_) if (v.getId() == id) return &v; return nullptr; }
+Vehicle* Warehouse::findVehicleById(int id) { for (auto& v : vehicles_) if (v.getId() == id) return &v; return nullptr; }

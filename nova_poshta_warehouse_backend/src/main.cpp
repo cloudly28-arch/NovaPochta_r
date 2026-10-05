@@ -1,68 +1,56 @@
-#include "Warehouse.h"
-
 #include <iostream>
+#include <string>
+#include "Warehouse.h"
+#include "persistence/Database.h"
+#include "services/InventoryService.h"
+#include "services/OrderService.h"
+#include "services/TaskService.h"
 
-int main() {
-    try {
-        Warehouse warehouse(1, "Nova Poshta Wholesale Warehouse", "Main warehouse");
+int main(int argc, char** argv) {
+    const std::string dbPath = argc > 1 ? argv[1] : "database/nova_poshta_warehouse.db";
 
-        warehouse.addWorker(Worker(1, "Ivan Petrenko", WorkerRole::Manager));
-        warehouse.addWorker(Worker(2, "Oleh Kovalenko", WorkerRole::Storekeeper));
-        warehouse.addWorker(Worker(3, "Andrii Bondar", WorkerRole::Loader));
-
-        warehouse.addStore(Store(1, "Store #1", "Kyiv", "+380000000001"));
-        warehouse.addStore(Store(2, "Store #2", "Lviv", "+380000000002"));
-
-        warehouse.addProduct(Product(1, "SKU-001", "Cardboard box M", 0.35, 28.50));
-        warehouse.addProduct(Product(2, "SKU-002", "Packing tape", 0.12, 42.00));
-        warehouse.addProduct(Product(3, "SKU-003", "Stretch film", 1.80, 195.00));
-
-        warehouse.receiveProduct(1, 100, "A-01-01");
-        warehouse.receiveProduct(2, 250, "A-01-02");
-        warehouse.receiveProduct(3, 50, "B-02-01");
-
-        Order order(1, 1);
-        order.addItem(OrderItem(1, 10, 28.50));
-        order.addItem(OrderItem(2, 5, 42.00));
-        warehouse.addOrder(order);
-
-        std::cout << warehouse.toString() << "\n\n";
-
-        std::cout << "Workers:\n";
-        for (const auto& worker : warehouse.getWorkers()) {
-            std::cout << "  " << worker.toString() << '\n';
-        }
-
-        std::cout << "\nStores:\n";
-        for (const auto& store : warehouse.getStores()) {
-            std::cout << "  " << store.toString() << '\n';
-        }
-
-        std::cout << "\nProducts:\n";
-        for (const auto& product : warehouse.getProducts()) {
-            std::cout << "  " << product.toString() << '\n';
-        }
-
-        std::cout << "\nInventory before order confirmation:\n";
-        for (const auto& item : warehouse.getInventory()) {
-            std::cout << "  " << item.toString() << '\n';
-        }
-
-        const bool confirmed = warehouse.reserveAndConfirmOrder(1);
-        std::cout << "\nOrder confirmation: " << (confirmed ? "success" : "failed") << '\n';
-
-        if (const auto* savedOrder = warehouse.findOrderById(1)) {
-            std::cout << savedOrder->toString() << '\n';
-        }
-
-        std::cout << "\nInventory after order confirmation:\n";
-        for (const auto& item : warehouse.getInventory()) {
-            std::cout << "  " << item.toString() << '\n';
-        }
-    } catch (const std::exception& ex) {
-        std::cerr << "Error: " << ex.what() << '\n';
+    Database database;
+    if (!database.open(dbPath)) {
+        std::cerr << "Cannot open database: " << dbPath << '\n';
         return 1;
     }
+
+    Warehouse warehouse;
+    if (!database.loadWarehouse(warehouse)) {
+        std::cerr << "Cannot load warehouse from database\n";
+        return 1;
+    }
+
+    InventoryService inventoryService(warehouse, &database);
+    OrderService orderService(warehouse, inventoryService, &database);
+    TaskService taskService(warehouse);
+
+    std::cout << "Warehouse: " << warehouse.getName() << '\n';
+    std::cout << "Stores: " << warehouse.getStores().size() << '\n';
+    std::cout << "Products: " << warehouse.getProducts().size() << '\n';
+    std::cout << "Inventory records: " << warehouse.getInventory().size() << "\n\n";
+
+    std::cout << "Warehouse stock:\n";
+    for (const auto& record : warehouse.getInventory()) {
+        const auto* product = warehouse.findProductById(record.getProductId());
+        std::cout << "  " << (product ? product->getName() : "Unknown")
+                  << ": " << record.getQuantity() << '\n';
+    }
+
+    std::cout << "\nFreshMart stock:\n";
+    for (const auto& row : database.getStoreInventory(1)) {
+        std::cout << "  " << row.productName << ": " << row.quantity << '/' << row.capacity << '\n';
+    }
+
+    // Example order. Uncomment to test real stock reservation/shipping.
+    // Order order(1, 1, "2026-10-04");
+    // order.addItem(OrderItem(1, 5)); // Milk
+    // order.addItem(OrderItem(2, 3)); // Bread
+    // if (orderService.createOrder(order) && orderService.reserveOrder(1)) {
+    //     taskService.createPickingTasksForOrder(1);
+    //     orderService.shipOrder(1);
+    //     orderService.completeOrder(1);
+    // }
 
     return 0;
 }

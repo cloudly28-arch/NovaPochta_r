@@ -20,7 +20,7 @@ enum class WorkerStatus {
 
 enum class OrderStatus {
     Created,
-    Accepted,
+    Reserved,
     InProgress,
     ReadyForShipment,
     Shipped,
@@ -34,7 +34,8 @@ enum class TaskType {
     PickGoods,
     MoveGoods,
     PackOrder,
-    LoadVehicle
+    LoadVehicle,
+    WriteOff
 };
 
 enum class TaskStatus {
@@ -52,3 +53,16 @@ enum class ZoneType {
     Packing,
     Shipping
 };
+
+inline std::string toString(OrderStatus status) {
+    switch (status) {
+        case OrderStatus::Created: return "Created";
+        case OrderStatus::Reserved: return "Reserved";
+        case OrderStatus::InProgress: return "InProgress";
+        case OrderStatus::ReadyForShipment: return "ReadyForShipment";
+        case OrderStatus::Shipped: return "Shipped";
+        case OrderStatus::Completed: return "Completed";
+        case OrderStatus::Cancelled: return "Cancelled";
+    }
+    return "Unknown";
+}

@@ -2,15 +2,15 @@
 
 #include <string>
 #include <vector>
-#include "Types.h"
-#include "Position.h"
+#include "domain/Position.h"
+#include "domain/Types.h"
 
 class WarehouseZone {
 private:
     int id_{};
     std::string name_;
     ZoneType type_{ZoneType::Storage};
-    Position position_;
+    Position position_{};
     double width_{};
     double height_{};
     std::vector<int> storageCellIds_;
@@ -18,9 +18,9 @@ private:
 public:
     WarehouseZone() = default;
     WarehouseZone(int id,
-                  const std::string& name,
+                  std::string name,
                   ZoneType type,
-                  const Position& position,
+                  Position position,
                   double width,
                   double height);
 

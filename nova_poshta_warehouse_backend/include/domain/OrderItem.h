@@ -11,6 +11,5 @@ public:
 
     int getProductId() const;
     int getQuantity() const;
-
     void setQuantity(int quantity);
 };

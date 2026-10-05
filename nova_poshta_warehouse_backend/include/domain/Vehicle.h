@@ -1,7 +1,7 @@
 #pragma once
 
 #include <string>
-#include "Position.h"
+#include "domain/Position.h"
 
 class Vehicle {
 private:
@@ -9,11 +9,11 @@ private:
     std::string model_;
     double maxLoad_{};
     bool available_{true};
-    Position position_;
+    Position position_{};
 
 public:
     Vehicle() = default;
-    Vehicle(int id, const std::string& model, double maxLoad);
+    Vehicle(int id, std::string model, double maxLoad);
 
     int getId() const;
     const std::string& getModel() const;

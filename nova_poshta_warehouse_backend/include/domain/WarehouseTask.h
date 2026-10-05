@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Types.h"
-#include "Position.h"
+#include "domain/Position.h"
+#include "domain/Types.h"
 
 class WarehouseTask {
 private:
@@ -12,8 +12,8 @@ private:
     int orderId_{-1};
     int productId_{-1};
     int quantity_{};
-    Position sourcePosition_;
-    Position targetPosition_;
+    Position sourcePosition_{};
+    Position targetPosition_{};
 
 public:
     WarehouseTask() = default;
@@ -21,8 +21,8 @@ public:
                   TaskType type,
                   int productId,
                   int quantity,
-                  const Position& sourcePosition,
-                  const Position& targetPosition);
+                  Position sourcePosition = {},
+                  Position targetPosition = {});
 
     int getId() const;
     TaskType getType() const;

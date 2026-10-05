@@ -12,9 +12,9 @@ private:
 public:
     Store() = default;
     Store(int id,
-          const std::string& name,
-          const std::string& address,
-          const std::string& contactPhone);
+          std::string name,
+          std::string address = {},
+          std::string contactPhone = {});
 
     int getId() const;
     const std::string& getName() const;
