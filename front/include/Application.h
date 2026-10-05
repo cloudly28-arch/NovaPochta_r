@@ -1,6 +1,8 @@
 #pragma once
 
 #include <SFML/Graphics.hpp>
+
+#include "application/BackendFacade.h"
 #include "ui/SimulationScreen.h"
 #include "ui/StartScreen.h"
 
@@ -28,9 +30,12 @@ private:
     sf::RenderWindow window_;
     sf::Clock deltaClock_;
 
-    Screen currentScreen_ = Screen::Start;
+    Screen currentScreen_ =
+        Screen::Start;
 
     SimulationSettings settings_;
     StartScreen startScreen_;
+
+    BackendFacade backend_;
     SimulationScreen simulationScreen_;
 };

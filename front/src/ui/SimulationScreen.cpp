@@ -1,11 +1,14 @@
 #include "ui/SimulationScreen.h"
 
 #include <imgui.h>
-#include <iostream>
-#include <cmath>
-#include <algorithm>
 
-void SimulationScreen::update(float deltaTime)
+#include <algorithm>
+#include <cmath>
+#include <iostream>
+
+void SimulationScreen::update(
+    float deltaTime
+)
 {
     if (
         simulationState_ !=
@@ -20,9 +23,13 @@ void SimulationScreen::update(float deltaTime)
     dayTimer_ +=
         deltaTime * simulationSpeed_;
 
-    if (dayTimer_ >= secondsPerDay_)
+    if (
+        dayTimer_ >=
+        secondsPerDay_
+    )
     {
-        dayTimer_ -= secondsPerDay_;
+        dayTimer_ -=
+            secondsPerDay_;
 
         advanceDay();
     }
@@ -34,7 +41,10 @@ void SimulationScreen::draw(
 )
 {
     loadTextures();
-    ensureStoresCreated(settings.stores);
+
+    ensureStoresCreated(
+        settings.stores
+    );
 
     handleMouseClick(window);
 
@@ -53,8 +63,9 @@ void SimulationScreen::ensureStoresCreated(
 )
 {
     if (
-        static_cast<int>(stores_.size())
-        == storeCount
+        static_cast<int>(
+            stores_.size()
+        ) == storeCount
     )
     {
         return;
@@ -65,11 +76,17 @@ void SimulationScreen::ensureStoresCreated(
     const float radiusX = 330.0f;
     const float radiusY = 220.0f;
 
-    for (int i = 0; i < storeCount; ++i)
+    for (
+        int i = 0;
+        i < storeCount;
+        ++i
+    )
     {
         const float angle =
             static_cast<float>(i) /
-            static_cast<float>(storeCount) *
+            static_cast<float>(
+                storeCount
+            ) *
             2.0f *
             3.14159265f;
 
@@ -91,8 +108,11 @@ void SimulationScreen::ensureStoresCreated(
         store.bounds =
             sf::FloatRect(
                 sf::Vector2f(
-                    store.position.x - 40.0f,
-                    store.position.y - 30.0f
+                    store.position.x -
+                        40.0f,
+
+                    store.position.y -
+                        30.0f
                 ),
                 sf::Vector2f(
                     80.0f,
@@ -100,17 +120,26 @@ void SimulationScreen::ensureStoresCreated(
                 )
             );
 
-        stores_.push_back(store);
+        stores_.push_back(
+            store
+        );
     }
 
     vehicles_.clear();
 
-    for (const StoreView& store : stores_)
+    for (
+        const StoreView& store :
+        stores_
+    )
     {
         VehicleView vehicle;
 
-        vehicle.targetStoreId = store.id;
-        vehicle.position = warehouseCenter_;
+        vehicle.targetStoreId =
+            store.id;
+
+        vehicle.position =
+            warehouseCenter_;
+
         vehicle.progress = 0.0f;
 
         vehicle.direction =
@@ -123,11 +152,11 @@ void SimulationScreen::ensureStoresCreated(
                 store.id - 1
             ) * 0.7f;
 
-        vehicles_.push_back(vehicle);
+        vehicles_.push_back(
+            vehicle
+        );
     }
 }
-
-
 
 void SimulationScreen::drawTopBar(
     const SimulationSettings& settings
@@ -158,7 +187,9 @@ void SimulationScreen::drawTopBar(
         ImGuiWindowFlags_NoCollapse
     );
 
-    ImGui::Text("NOVA WAREHOUSE");
+    ImGui::Text(
+        "NOVA WAREHOUSE"
+    );
 
     ImGui::SameLine(280.0f);
 
@@ -189,25 +220,33 @@ void SimulationScreen::drawTopBar(
         SimulationState::Running
     )
     {
-        ImGui::Text("Status: RUNNING");
+        ImGui::Text(
+            "Status: RUNNING"
+        );
     }
     else if (
         simulationState_ ==
         SimulationState::Paused
     )
     {
-        ImGui::Text("Status: PAUSED");
+        ImGui::Text(
+            "Status: PAUSED"
+        );
     }
     else if (
         simulationState_ ==
         SimulationState::Finished
     )
     {
-        ImGui::Text("Status: FINISHED");
+        ImGui::Text(
+            "Status: FINISHED"
+        );
     }
     else
     {
-        ImGui::Text("Status: STOPPED");
+        ImGui::Text(
+            "Status: STOPPED"
+        );
     }
 
     ImGui::End();
@@ -223,7 +262,8 @@ void SimulationScreen::drawBottomBar()
     ImGui::SetNextWindowPos(
         ImVec2(
             0.0f,
-            displaySize.y - height
+            displaySize.y -
+                height
         ),
         ImGuiCond_Always
     );
@@ -248,7 +288,10 @@ void SimulationScreen::drawBottomBar()
     if (
         ImGui::Button(
             "START",
-            ImVec2(100.0f, 40.0f)
+            ImVec2(
+                100.0f,
+                40.0f
+            )
         )
     )
     {
@@ -265,7 +308,8 @@ void SimulationScreen::drawBottomBar()
                 vehicles_
             )
             {
-                vehicle.progress = 0.0f;
+                vehicle.progress =
+                    0.0f;
 
                 vehicle.position =
                     warehouseCenter_;
@@ -275,7 +319,8 @@ void SimulationScreen::drawBottomBar()
 
                 vehicle.startDelay =
                     static_cast<float>(
-                        vehicle.targetStoreId - 1
+                        vehicle.targetStoreId -
+                        1
                     ) * 0.7f;
             }
         }
@@ -289,7 +334,10 @@ void SimulationScreen::drawBottomBar()
     if (
         ImGui::Button(
             "PAUSE",
-            ImVec2(100.0f, 40.0f)
+            ImVec2(
+                100.0f,
+                40.0f
+            )
         )
     )
     {
@@ -308,16 +356,23 @@ void SimulationScreen::drawBottomBar()
     if (
         ImGui::Button(
             "STOP",
-            ImVec2(100.0f, 40.0f)
+            ImVec2(
+                100.0f,
+                40.0f
+            )
         )
     )
     {
         simulationState_ =
             SimulationState::Stopped;
+
         currentDay_ = 1;
         dayTimer_ = 0.0f;
 
-        for (VehicleView& vehicle : vehicles_)
+        for (
+            VehicleView& vehicle :
+            vehicles_
+        )
         {
             vehicle.progress = 0.0f;
 
@@ -329,7 +384,8 @@ void SimulationScreen::drawBottomBar()
 
             vehicle.startDelay =
                 static_cast<float>(
-                    vehicle.targetStoreId - 1
+                    vehicle.targetStoreId -
+                    1
                 ) * 0.7f;
         }
     }
@@ -372,10 +428,12 @@ void SimulationScreen::drawBottomBar()
         "Current speed: %.0fx",
         simulationSpeed_
     );
+
     ImGui::SameLine(900.0f);
 
     float dayProgress =
-        dayTimer_ / secondsPerDay_;
+        dayTimer_ /
+        secondsPerDay_;
 
     dayProgress =
         std::clamp(
@@ -386,7 +444,10 @@ void SimulationScreen::drawBottomBar()
 
     ImGui::ProgressBar(
         dayProgress,
-        ImVec2(200.0f, 20.0f)
+        ImVec2(
+            200.0f,
+            20.0f
+        )
     );
 
     ImGui::End();
@@ -440,13 +501,18 @@ void SimulationScreen::drawWarehouse(
     );
 
     const sf::Vector2f position(
-        warehouseCenter_.x - size.x / 2.0f,
-        warehouseCenter_.y - size.y / 2.0f
+        warehouseCenter_.x -
+            size.x / 2.0f,
+
+        warehouseCenter_.y -
+            size.y / 2.0f
     );
 
     if (warehouseTextureLoaded_)
     {
-        sf::Sprite warehouse(warehouseTexture_);
+        sf::Sprite warehouse(
+            warehouseTexture_
+        );
 
         const sf::Vector2u textureSize =
             warehouseTexture_.getSize();
@@ -465,10 +531,14 @@ void SimulationScreen::drawWarehouse(
         warehouse.setScale(
             sf::Vector2f(
                 size.x /
-                    static_cast<float>(textureSize.x),
+                    static_cast<float>(
+                        textureSize.x
+                    ),
 
                 size.y /
-                    static_cast<float>(textureSize.y)
+                    static_cast<float>(
+                        textureSize.y
+                    )
             )
         );
 
@@ -479,9 +549,13 @@ void SimulationScreen::drawWarehouse(
     }
     else
     {
-        sf::RectangleShape warehouse(size);
+        sf::RectangleShape warehouse(
+            size
+        );
 
-        warehouse.setPosition(position);
+        warehouse.setPosition(
+            position
+        );
 
         warehouse.setFillColor(
             sf::Color(
@@ -651,22 +725,29 @@ void SimulationScreen::drawVehicles(
     sf::RenderWindow& window
 )
 {
-    for (const VehicleView& vehicle : vehicles_)
+    for (
+        const VehicleView& vehicle :
+        vehicles_
+    )
     {
         if (!vehicle.active)
         {
             continue;
         }
 
-        if (vehicle.startDelay > 0.0f)
+        if (
+            vehicle.startDelay >
+            0.0f
+        )
         {
             continue;
         }
 
-        const sf::Vector2f storePosition =
-            getStorePosition(
-                vehicle.targetStoreId
-            );
+        const sf::Vector2f
+            storePosition =
+                getStorePosition(
+                    vehicle.targetStoreId
+                );
 
         sf::Vector2f direction;
 
@@ -700,13 +781,17 @@ void SimulationScreen::drawVehicles(
                 truckTexture_
             );
 
-            const sf::Vector2u textureSize =
-                truckTexture_.getSize();
+            const sf::Vector2u
+                textureSize =
+                    truckTexture_.getSize();
 
             truck.setOrigin(
                 sf::Vector2f(
-                    textureSize.x / 2.0f,
-                    textureSize.y / 2.0f
+                    textureSize.x /
+                        2.0f,
+
+                    textureSize.y /
+                        2.0f
                 )
             );
 
@@ -822,35 +907,49 @@ void SimulationScreen::updateVehicles(
         return;
     }
 
-    for (VehicleView& vehicle : vehicles_)
+    for (
+        VehicleView& vehicle :
+        vehicles_
+    )
     {
         if (!vehicle.active)
         {
             continue;
         }
 
-        if (vehicle.startDelay > 0.0f)
+        if (
+            vehicle.startDelay >
+            0.0f
+        )
         {
             vehicle.startDelay -=
-                deltaTime * simulationSpeed_;
+                deltaTime *
+                simulationSpeed_;
 
             continue;
         }
 
-        const sf::Vector2f storePosition =
-            getStorePosition(
-                vehicle.targetStoreId
-            );
+        const sf::Vector2f
+            storePosition =
+                getStorePosition(
+                    vehicle.targetStoreId
+                );
 
         const float movementSpeed =
-            0.20f * simulationSpeed_;
+            0.20f *
+            simulationSpeed_;
 
         vehicle.progress +=
-            movementSpeed * deltaTime;
+            movementSpeed *
+            deltaTime;
 
-        if (vehicle.progress >= 1.0f)
+        if (
+            vehicle.progress >=
+            1.0f
+        )
         {
-            vehicle.progress = 0.0f;
+            vehicle.progress =
+                0.0f;
 
             if (
                 vehicle.direction ==
@@ -858,14 +957,17 @@ void SimulationScreen::updateVehicles(
             )
             {
                 vehicle.direction =
-                    VehicleDirection::ToWarehouse;
+                    VehicleDirection::
+                        ToWarehouse;
             }
             else
             {
                 vehicle.direction =
-                    VehicleDirection::ToStore;
+                    VehicleDirection::
+                        ToStore;
 
-                vehicle.startDelay = 1.0f;
+                vehicle.startDelay =
+                    1.0f;
             }
         }
 
@@ -877,13 +979,19 @@ void SimulationScreen::updateVehicles(
             VehicleDirection::ToStore
         )
         {
-            start = warehouseCenter_;
-            end = storePosition;
+            start =
+                warehouseCenter_;
+
+            end =
+                storePosition;
         }
         else
         {
-            start = storePosition;
-            end = warehouseCenter_;
+            start =
+                storePosition;
+
+            end =
+                warehouseCenter_;
         }
 
         vehicle.position =
@@ -903,7 +1011,10 @@ SimulationScreen::getStorePosition(
         stores_
     )
     {
-        if (store.id == storeId)
+        if (
+            store.id ==
+            storeId
+        )
         {
             return store.position;
         }
@@ -926,15 +1037,17 @@ void SimulationScreen::handleMouseClick(
         !mouseWasPressed_
     )
     {
-        const sf::Vector2i pixelPosition =
-            sf::Mouse::getPosition(
-                window
-            );
+        const sf::Vector2i
+            pixelPosition =
+                sf::Mouse::getPosition(
+                    window
+                );
 
-        const sf::Vector2f mousePosition =
-            window.mapPixelToCoords(
-                pixelPosition
-            );
+        const sf::Vector2f
+            mousePosition =
+                window.mapPixelToCoords(
+                    pixelPosition
+                );
 
         if (
             warehouseBounds_.contains(
@@ -943,9 +1056,14 @@ void SimulationScreen::handleMouseClick(
         )
         {
             selectedType_ =
-                SelectedObjectType::Warehouse;
+                SelectedObjectType::
+                    Warehouse;
 
-            selectedStoreId_ = -1;
+            selectedStoreId_ =
+                -1;
+
+            selectedStoreName_.clear();
+            selectedStoreInventory_.clear();
         }
         else
         {
@@ -961,10 +1079,13 @@ void SimulationScreen::handleMouseClick(
                 )
                 {
                     selectedType_ =
-                        SelectedObjectType::Store;
+                        SelectedObjectType::
+                            Store;
 
                     selectedStoreId_ =
                         store.id;
+
+                    refreshSelectedStoreData();
 
                     break;
                 }
@@ -990,7 +1111,7 @@ void SimulationScreen::drawInfoPanel()
         ImGui::GetIO().DisplaySize;
 
     const float panelWidth =
-        320.0f;
+        380.0f;
 
     const float topHeight =
         70.0f;
@@ -1095,12 +1216,42 @@ void SimulationScreen::drawInfoPanel()
         SelectedObjectType::Store
     )
     {
-        ImGui::Text(
-            "STORE #%d",
-            selectedStoreId_
-        );
+        if (
+            !selectedStoreName_.empty()
+        )
+        {
+            ImGui::TextUnformatted(
+                selectedStoreName_.c_str()
+            );
+        }
+        else
+        {
+            ImGui::Text(
+                "STORE #%d",
+                selectedStoreId_
+            );
+        }
 
         ImGui::Separator();
+
+        if (
+            backend_ == nullptr ||
+            !backend_->isReady()
+        )
+        {
+            ImGui::TextColored(
+                ImVec4(
+                    1.0f,
+                    0.35f,
+                    0.35f,
+                    1.0f
+                ),
+                "Backend database is not available"
+            );
+
+            ImGui::End();
+            return;
+        }
 
         ImGui::Text(
             "Status: Working"
@@ -1112,17 +1263,119 @@ void SimulationScreen::drawInfoPanel()
             "Current stock:"
         );
 
-        ImGui::BulletText(
-            "Product A: 24"
-        );
+        const ImGuiTableFlags flags =
+            ImGuiTableFlags_Borders |
+            ImGuiTableFlags_RowBg |
+            ImGuiTableFlags_Resizable |
+            ImGuiTableFlags_SizingStretchProp;
 
-        ImGui::BulletText(
-            "Product B: 12"
-        );
+        if (
+            ImGui::BeginTable(
+                "StoreInventoryTable",
+                4,
+                flags
+            )
+        )
+        {
+            ImGui::TableSetupColumn(
+                "Product",
+                ImGuiTableColumnFlags_None,
+                2.3f
+            );
 
-        ImGui::BulletText(
-            "Product C: 30"
-        );
+            ImGui::TableSetupColumn(
+                "Qty"
+            );
+
+            ImGui::TableSetupColumn(
+                "Capacity"
+            );
+
+            ImGui::TableSetupColumn(
+                "Status"
+            );
+
+            ImGui::TableHeadersRow();
+
+            for (
+                const ProductStockInfo& item :
+                selectedStoreInventory_
+            )
+            {
+                ImGui::TableNextRow();
+
+                ImGui::TableSetColumnIndex(
+                    0
+                );
+
+                ImGui::TextUnformatted(
+                    item.productName.c_str()
+                );
+
+                ImGui::TableSetColumnIndex(
+                    1
+                );
+
+                ImGui::Text(
+                    "%d",
+                    item.quantity
+                );
+
+                ImGui::TableSetColumnIndex(
+                    2
+                );
+
+                ImGui::Text(
+                    "%d",
+                    item.capacity
+                );
+
+                ImGui::TableSetColumnIndex(
+                    3
+                );
+
+                if (
+                    item.quantity <=
+                    item.minStock
+                )
+                {
+                    ImGui::TextColored(
+                        ImVec4(
+                            1.0f,
+                            0.35f,
+                            0.35f,
+                            1.0f
+                        ),
+                        "LOW"
+                    );
+                }
+                else
+                {
+                    ImGui::TextColored(
+                        ImVec4(
+                            0.35f,
+                            1.0f,
+                            0.45f,
+                            1.0f
+                        ),
+                        "OK"
+                    );
+                }
+            }
+
+            ImGui::EndTable();
+        }
+
+        if (
+            selectedStoreInventory_.empty()
+        )
+        {
+            ImGui::Spacing();
+
+            ImGui::Text(
+                "No products found."
+            );
+        }
 
         ImGui::Spacing();
 
@@ -1148,13 +1401,19 @@ void SimulationScreen::loadTextures()
     texturesLoaded_ = true;
 
     const auto warehousePath =
-        assetsPath_ / "textures" / "warehouse.png";
+        assetsPath_ /
+        "textures" /
+        "warehouse.png";
 
     const auto storePath =
-        assetsPath_ / "textures" / "store.png";
+        assetsPath_ /
+        "textures" /
+        "store.png";
 
     const auto truckPath =
-        assetsPath_ / "textures" / "truck.png";
+        assetsPath_ /
+        "textures" /
+        "truck.png";
 
     warehouseTextureLoaded_ =
         warehouseTexture_.loadFromFile(
@@ -1172,6 +1431,13 @@ void SimulationScreen::loadTextures()
         );
 }
 
+void SimulationScreen::setBackend(
+    BackendFacade* backend
+)
+{
+    backend_ = backend;
+}
+
 void SimulationScreen::setAssetsPath(
     const std::filesystem::path& path
 )
@@ -1179,11 +1445,39 @@ void SimulationScreen::setAssetsPath(
     assetsPath_ = path;
 }
 
+void SimulationScreen::
+refreshSelectedStoreData()
+{
+    selectedStoreName_.clear();
+
+    selectedStoreInventory_.clear();
+
+    if (
+        backend_ == nullptr ||
+        !backend_->isReady() ||
+        selectedStoreId_ < 0
+    )
+    {
+        return;
+    }
+
+    selectedStoreName_ =
+        backend_->getStoreName(
+            selectedStoreId_
+        );
+
+    selectedStoreInventory_ =
+        backend_->getStoreInventory(
+            selectedStoreId_
+        );
+}
+
 void SimulationScreen::configure(
     const SimulationSettings& settings
 )
 {
-    totalDays_ = settings.days;
+    totalDays_ =
+        settings.days;
 
     currentDay_ = 1;
     dayTimer_ = 0.0f;
@@ -1193,9 +1487,13 @@ void SimulationScreen::configure(
     simulationState_ =
         SimulationState::Stopped;
 }
+
 void SimulationScreen::advanceDay()
 {
-    if (currentDay_ >= totalDays_)
+    if (
+        currentDay_ >=
+        totalDays_
+    )
     {
         simulationState_ =
             SimulationState::Finished;
@@ -1206,5 +1504,4 @@ void SimulationScreen::advanceDay()
     }
 
     currentDay_++;
-
 }

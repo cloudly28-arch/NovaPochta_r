@@ -30,6 +30,11 @@ set(IMGUI_SFML_FIND_SFML OFF)
 
 FetchContent_MakeAvailable(ImGui-SFML)
 
+add_subdirectory(
+    ${CMAKE_CURRENT_SOURCE_DIR}/../nova_poshta_warehouse_backend
+    ${CMAKE_BINARY_DIR}/nova_poshta_backend
+)
+
 add_executable(NovaPoshtaWarehouseFrontend
     src/main.cpp
     src/Application.cpp
@@ -43,12 +48,14 @@ target_include_directories(
     include
 )
 
-target_link_libraries(NovaPoshtaWarehouseFrontend
+target_link_libraries(
+    NovaPoshtaWarehouseFrontend
     PRIVATE
     SFML::Graphics
     SFML::Window
     SFML::System
     ImGui-SFML::ImGui-SFML
+    nova_warehouse_backend
 )
 
 add_custom_command(
@@ -58,4 +65,11 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_CURRENT_SOURCE_DIR}/assets
         $<TARGET_FILE_DIR:NovaPoshtaWarehouseFrontend>/assets
+
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+        $<TARGET_FILE_DIR:NovaPoshtaWarehouseFrontend>/database
+
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${CMAKE_CURRENT_SOURCE_DIR}/../nova_poshta_warehouse_backend/nova_poshta_warehouse.db
+        $<TARGET_FILE_DIR:NovaPoshtaWarehouseFrontend>/database/nova_poshta_warehouse.db
 )

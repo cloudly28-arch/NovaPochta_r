@@ -1,26 +1,37 @@
 #pragma once
 
 #include <SFML/Graphics.hpp>
-#include <vector>
+
 #include <filesystem>
+#include <string>
+#include <vector>
+
+#include "application/BackendFacade.h"
 #include "ui/StartScreen.h"
 
 class SimulationScreen
 {
 public:
     void update(float deltaTime);
-    
+
     void draw(
         sf::RenderWindow& window,
         const SimulationSettings& settings
     );
-    void setAssetsPath(const std::filesystem::path& path);
+
+    void setBackend(
+        BackendFacade* backend
+    );
+
+    void setAssetsPath(
+        const std::filesystem::path& path
+    );
+
     void configure(
         const SimulationSettings& settings
     );
 
 private:
-      
     enum class SelectedObjectType
     {
         None,
@@ -66,8 +77,10 @@ private:
     };
 
 private:
-    void loadTextures();  
-    void ensureStoresCreated(int storeCount);
+    void loadTextures();
+    void ensureStoresCreated(
+        int storeCount
+    );
 
     void drawTopBar(
         const SimulationSettings& settings
@@ -75,23 +88,39 @@ private:
 
     void drawBottomBar();
 
-    void drawRoutes(sf::RenderWindow& window);
+    void drawRoutes(
+        sf::RenderWindow& window
+    );
 
-    void drawWarehouse(sf::RenderWindow& window);
+    void drawWarehouse(
+        sf::RenderWindow& window
+    );
 
-    void drawStores(sf::RenderWindow& window);
+    void drawStores(
+        sf::RenderWindow& window
+    );
 
-    void drawVehicles(sf::RenderWindow& window);
+    void drawVehicles(
+        sf::RenderWindow& window
+    );
 
-    void handleMouseClick(sf::RenderWindow& window);
+    void handleMouseClick(
+        sf::RenderWindow& window
+    );
 
     void drawInfoPanel();
 
-    void updateVehicles(float deltaTime);
+    void refreshSelectedStoreData();
 
-    sf::Vector2f getStorePosition(int storeId) const;
+    void updateVehicles(
+        float deltaTime
+    );
+
+    sf::Vector2f getStorePosition(
+        int storeId
+    ) const;
+
     void advanceDay();
-    
 
 private:
     std::vector<StoreView> stores_;
@@ -121,8 +150,8 @@ private:
 
     float dayTimer_ = 0.0f;
 
-    // Сколько реальных секунд длится один модельный день.
     float secondsPerDay_ = 8.0f;
+
     sf::Texture warehouseTexture_;
     sf::Texture storeTexture_;
     sf::Texture truckTexture_;
@@ -132,5 +161,13 @@ private:
     bool truckTextureLoaded_ = false;
 
     bool texturesLoaded_ = false;
+
     std::filesystem::path assetsPath_;
+
+    BackendFacade* backend_ = nullptr;
+
+    std::string selectedStoreName_;
+
+    std::vector<ProductStockInfo>
+        selectedStoreInventory_;
 };
