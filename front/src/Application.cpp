@@ -43,21 +43,32 @@ Application::Application()
         window_.close();
         return;
     }
-
-    // Кириллица для названий товаров из SQLite.
     ImGuiIO& io = ImGui::GetIO();
 
+    // Кириллица для названий товаров из SQLite.
     ImFont* cyrillicFont =
-        io.Fonts->AddFontFromFileTTF(
-            "C:/Windows/Fonts/arial.ttf",
-            18.0f,
-            nullptr,
-            io.Fonts->GetGlyphRangesCyrillic()
-        );
+    io.Fonts->AddFontFromFileTTF(
+        "C:/Windows/Fonts/arial.ttf",
+        18.0f,
+        nullptr,
+        io.Fonts->GetGlyphRangesCyrillic()
+    );
 
     if (cyrillicFont != nullptr)
     {
+        // Делаем кириллический шрифт основным для всего ImGui.
+        io.FontDefault = cyrillicFont;
+
+        // Пересоздаём текстуру шрифтов после добавления Arial.
         ImGui::SFML::UpdateFontTexture();
+
+        std::cout
+            << "Cyrillic font loaded successfully\n";
+    }
+    else
+    {
+        std::cerr
+            << "Failed to load Cyrillic font\n";
     }
 
     const auto databasePath =

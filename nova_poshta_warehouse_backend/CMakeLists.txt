@@ -41,7 +41,7 @@ target_include_directories(
 target_link_libraries(
     nova_warehouse_backend
     PUBLIC
-    SQLite::SQLite3
+    SQLite3::SQLite3
 )
 
 add_executable(
