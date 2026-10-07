@@ -1,0 +1,20 @@
+{
+  "configurations": [
+    {
+      "name": "MSYS2 UCRT64",
+      "compilerPath": "C:/msys64/ucrt64/bin/g++.exe",
+      "intelliSenseMode": "windows-gcc-x64",
+      "cStandard": "c17",
+      "cppStandard": "c++20",
+      "includePath": [
+        "${workspaceFolder}/front/include",
+        "${workspaceFolder}/nova_poshta_warehouse_backend/include",
+        "C:/msys64/ucrt64/include",
+        "${workspaceFolder}/front/build/_deps/imgui-src",
+        "${workspaceFolder}/front/build/_deps/imgui-sfml-src"
+      ],
+      "compileCommands": "${workspaceFolder}/front/build/compile_commands.json"
+    }
+  ],
+  "version": 4
+}

@@ -1,0 +1,6 @@
+{
+  "cmake.sourceDirectory": "${workspaceFolder}/front",
+  "cmake.buildDirectory": "${workspaceFolder}/front/build",
+  "cmake.generator": "Ninja",
+  "cmake.configureOnOpen": true
+}
