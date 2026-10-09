@@ -113,7 +113,38 @@ BackendFacade::getStoreInventory(
 
     return result;
 }
+std::vector<WarehouseStockInfo>
+BackendFacade::getWarehouseInventory() const
+{
+    std::vector<WarehouseStockInfo> result;
 
+    if (!ready_)
+    {
+        return result;
+    }
+
+    const std::vector<WarehouseStockRow> rows =
+        database_.getWarehouseInventory(
+            warehouse_.getId()
+        );
+
+    result.reserve(rows.size());
+
+    for (const WarehouseStockRow& row : rows)
+    {
+        result.push_back(
+            WarehouseStockInfo{
+                row.productId,
+                row.productName,
+                row.quantity,
+                row.capacity,
+                row.minStock
+            }
+        );
+    }
+
+    return result;
+}
 std::vector<SupplierRequestInfo>
 BackendFacade::getSupplierRequests() const
 {

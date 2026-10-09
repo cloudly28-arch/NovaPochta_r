@@ -10,6 +10,7 @@ void SimulationScreen::update(
     float deltaTime
 )
 {
+    refreshWarehouseData();
     refreshSupplierData();
     if (
         simulationState_ !=
@@ -1454,16 +1455,34 @@ void SimulationScreen::drawInfoPanel()
         ImGuiWindowFlags_NoResize |
         ImGuiWindowFlags_NoCollapse
     );
+if (
+    selectedType_ ==
+    SelectedObjectType::Warehouse
+)
+{
+    ImGui::Text(
+        "WAREHOUSE"
+    );
+
+    ImGui::Separator();
 
     if (
-        selectedType_ ==
-        SelectedObjectType::Warehouse
+        backend_ == nullptr ||
+        !backend_->isReady()
     )
     {
-        ImGui::Text("WAREHOUSE");
-
-        ImGui::Separator();
-
+        ImGui::TextColored(
+            ImVec4(
+                1.0f,
+                0.35f,
+                0.35f,
+                1.0f
+            ),
+            "Backend database is not available"
+        );
+    }
+    else
+    {
         ImGui::Text(
             "Status: Working"
         );
@@ -1476,41 +1495,256 @@ void SimulationScreen::drawInfoPanel()
             )
         )
         {
+            // =========================
+            // PRODUCTS
+            // =========================
             if (
                 ImGui::BeginTabItem(
                     "Products"
                 )
             )
             {
-                ImGui::Text(
-                    "Product data will be here."
-                );
+                const ImGuiTableFlags flags =
+                    ImGuiTableFlags_Borders |
+                    ImGuiTableFlags_RowBg |
+                    ImGuiTableFlags_Resizable |
+                    ImGuiTableFlags_SizingStretchProp;
 
-                ImGui::EndTabItem();
-            }
-
-            if (
-                ImGui::BeginTabItem(
-                    "Orders"
+                if (
+                    ImGui::BeginTable(
+                        "WarehouseInventoryTable",
+                        5,
+                        flags
+                    )
                 )
-            )
-            {
-                ImGui::Text(
-                    "Order data will be here."
-                );
+                {
+                    ImGui::TableSetupColumn(
+                        "Product",
+                        ImGuiTableColumnFlags_None,
+                        2.2f
+                    );
+
+                    ImGui::TableSetupColumn(
+                        "Qty"
+                    );
+
+                    ImGui::TableSetupColumn(
+                        "Capacity"
+                    );
+
+                    ImGui::TableSetupColumn(
+                        "Min"
+                    );
+
+                    ImGui::TableSetupColumn(
+                        "Status"
+                    );
+
+                    ImGui::TableHeadersRow();
+
+                    for (
+                        const WarehouseStockInfo& item :
+                        warehouseInventory_
+                    )
+                    {
+                        ImGui::TableNextRow();
+
+                        ImGui::TableSetColumnIndex(0);
+
+                        ImGui::TextUnformatted(
+                            item.productName.c_str()
+                        );
+
+                        ImGui::TableSetColumnIndex(1);
+
+                        ImGui::Text(
+                            "%d",
+                            item.quantity
+                        );
+
+                        ImGui::TableSetColumnIndex(2);
+
+                        ImGui::Text(
+                            "%d",
+                            item.capacity
+                        );
+
+                        ImGui::TableSetColumnIndex(3);
+
+                        ImGui::Text(
+                            "%d",
+                            item.minStock
+                        );
+
+                        ImGui::TableSetColumnIndex(4);
+
+                        if (
+                            item.quantity <=
+                            item.minStock
+                        )
+                        {
+                            ImGui::TextColored(
+                                ImVec4(
+                                    1.0f,
+                                    0.35f,
+                                    0.35f,
+                                    1.0f
+                                ),
+                                "LOW"
+                            );
+                        }
+                        else
+                        {
+                            ImGui::TextColored(
+                                ImVec4(
+                                    0.35f,
+                                    1.0f,
+                                    0.45f,
+                                    1.0f
+                                ),
+                                "OK"
+                            );
+                        }
+                    }
+
+                    ImGui::EndTable();
+                }
+
+                if (
+                    warehouseInventory_.empty()
+                )
+                {
+                    ImGui::Spacing();
+
+                    ImGui::Text(
+                        "No warehouse products found."
+                    );
+                }
 
                 ImGui::EndTabItem();
             }
 
+            // =========================
+            // SUPPLY
+            // =========================
             if (
                 ImGui::BeginTabItem(
                     "Supply"
                 )
             )
             {
+                int activeRequests = 0;
+
+                for (
+                    const SupplierRequestInfo& request :
+                    supplierRequests_
+                )
+                {
+                    if (
+                        request.status !=
+                        "Delivered"
+                    )
+                    {
+                        activeRequests++;
+                    }
+                }
+
                 ImGui::Text(
-                    "Supply data will be here."
+                    "Active requests: %d",
+                    activeRequests
                 );
+
+                ImGui::Spacing();
+
+                if (
+                    supplierRequests_.empty()
+                )
+                {
+                    ImGui::Text(
+                        "No supplier requests."
+                    );
+                }
+                else
+                {
+                    const ImGuiTableFlags flags =
+                        ImGuiTableFlags_Borders |
+                        ImGuiTableFlags_RowBg |
+                        ImGuiTableFlags_Resizable;
+
+                    if (
+                        ImGui::BeginTable(
+                            "SupplierRequestsTable",
+                            5,
+                            flags
+                        )
+                    )
+                    {
+                        ImGui::TableSetupColumn(
+                            "Product"
+                        );
+
+                        ImGui::TableSetupColumn(
+                            "Qty"
+                        );
+
+                        ImGui::TableSetupColumn(
+                            "Created"
+                        );
+
+                        ImGui::TableSetupColumn(
+                            "Delivery"
+                        );
+
+                        ImGui::TableSetupColumn(
+                            "Status"
+                        );
+
+                        ImGui::TableHeadersRow();
+
+                        for (
+                            const SupplierRequestInfo& request :
+                            supplierRequests_
+                        )
+                        {
+                            ImGui::TableNextRow();
+
+                            ImGui::TableSetColumnIndex(0);
+
+                            ImGui::TextUnformatted(
+                                request.productName.c_str()
+                            );
+
+                            ImGui::TableSetColumnIndex(1);
+
+                            ImGui::Text(
+                                "%d",
+                                request.requestedQuantity
+                            );
+
+                            ImGui::TableSetColumnIndex(2);
+
+                            ImGui::Text(
+                                "%d",
+                                request.createdDay
+                            );
+
+                            ImGui::TableSetColumnIndex(3);
+
+                            ImGui::Text(
+                                "%d",
+                                request.deliveryDay
+                            );
+
+                            ImGui::TableSetColumnIndex(4);
+
+                            ImGui::TextUnformatted(
+                                request.status.c_str()
+                            );
+                        }
+
+                        ImGui::EndTable();
+                    }
+                }
 
                 ImGui::EndTabItem();
             }
@@ -1518,339 +1752,8 @@ void SimulationScreen::drawInfoPanel()
             ImGui::EndTabBar();
         }
     }
-    else if (
-    selectedType_ ==
-    SelectedObjectType::Supplier
-    )
-    {
-        ImGui::Text(
-            "SUPPLIER COMPANY"
-        );
-
-        ImGui::Separator();
-
-        int activeRequests = 0;
-
-        for (
-            const SupplierRequestInfo& request :
-            supplierRequests_
-        )
-        {
-            if (
-                request.status != "Delivered"
-            )
-            {
-                activeRequests++;
-            }
-        }
-
-        if (activeRequests == 0)
-        {
-            ImGui::Text(
-                "Status: Waiting"
-            );
-
-            ImGui::Spacing();
-
-            ImGui::TextColored(
-                ImVec4(
-                    0.65f,
-                    0.65f,
-                    0.65f,
-                    1.0f
-                ),
-                "No active supplier requests"
-            );
-
-            ImGui::Spacing();
-
-            ImGui::Text(
-                "Supplier truck:"
-            );
-
-            ImGui::Text(
-                "Waiting"
-            );
-        }
-        else
-        {
-            ImGui::Text(
-                "Status: Working"
-            );
-
-            ImGui::Text(
-                "Active requests: %d",
-                activeRequests
-            );
-
-            ImGui::Spacing();
-            ImGui::Separator();
-            ImGui::Spacing();
-
-            for (
-                const SupplierRequestInfo& request :
-                supplierRequests_
-            )
-            {
-                if (
-                    request.status ==
-                    "Delivered"
-                )
-                {
-                    continue;
-                }
-
-                ImGui::Text(
-                    "Request #%d",
-                    request.id
-                );
-
-                ImGui::Text(
-                    "Product: %s",
-                    request.productName.c_str()
-                );
-
-                ImGui::Text(
-                    "Quantity: %d",
-                    request.requestedQuantity
-                );
-
-                ImGui::Text(
-                    "Created day: %d",
-                    request.createdDay
-                );
-
-                ImGui::Text(
-                    "Delivery day: %d",
-                    request.deliveryDay
-                );
-
-                ImGui::Text(
-                    "Status: %s",
-                    request.status.c_str()
-                );
-
-                ImGui::Spacing();
-            }
-
-            ImGui::Separator();
-            ImGui::Spacing();
-
-            ImGui::Text(
-                "Supplier truck:"
-            );
-
-            if (supplierTruck_.active)
-            {
-                if (!supplierTruck_.returning)
-                {
-                    ImGui::TextColored(
-                        ImVec4(
-                            1.0f,
-                            0.65f,
-                            0.20f,
-                            1.0f
-                        ),
-                        "Delivering products to warehouse"
-                    );
-                }
-                else
-                {
-                    ImGui::TextColored(
-                        ImVec4(
-                            0.50f,
-                            0.80f,
-                            1.0f,
-                            1.0f
-                        ),
-                        "Returning to supplier"
-                    );
-                }
-            }
-            else
-            {
-                ImGui::Text(
-                    "Waiting"
-                );
-            }
-        }
-    }
-    else if (
-        selectedType_ ==
-        SelectedObjectType::Store
-    )
-    {
-        if (
-            !selectedStoreName_.empty()
-        )
-        {
-            ImGui::TextUnformatted(
-                selectedStoreName_.c_str()
-            );
-        }
-        else
-        {
-            ImGui::Text(
-                "STORE #%d",
-                selectedStoreId_
-            );
-        }
-
-        ImGui::Separator();
-
-        if (
-            backend_ == nullptr ||
-            !backend_->isReady()
-        )
-        {
-            ImGui::TextColored(
-                ImVec4(
-                    1.0f,
-                    0.35f,
-                    0.35f,
-                    1.0f
-                ),
-                "Backend database is not available"
-            );
-
-            ImGui::End();
-            return;
-        }
-
-        ImGui::Text(
-            "Status: Working"
-        );
-
-        ImGui::Spacing();
-
-        ImGui::Text(
-            "Current stock:"
-        );
-
-        const ImGuiTableFlags flags =
-            ImGuiTableFlags_Borders |
-            ImGuiTableFlags_RowBg |
-            ImGuiTableFlags_Resizable |
-            ImGuiTableFlags_SizingStretchProp;
-
-        if (
-            ImGui::BeginTable(
-                "StoreInventoryTable",
-                4,
-                flags
-            )
-        )
-        {
-            ImGui::TableSetupColumn(
-                "Product",
-                ImGuiTableColumnFlags_None,
-                2.3f
-            );
-
-            ImGui::TableSetupColumn(
-                "Qty"
-            );
-
-            ImGui::TableSetupColumn(
-                "Capacity"
-            );
-
-            ImGui::TableSetupColumn(
-                "Status"
-            );
-
-            ImGui::TableHeadersRow();
-
-            for (
-                const ProductStockInfo& item :
-                selectedStoreInventory_
-            )
-            {
-                ImGui::TableNextRow();
-
-                ImGui::TableSetColumnIndex(
-                    0
-                );
-
-                ImGui::TextUnformatted(
-                    item.productName.c_str()
-                );
-
-                ImGui::TableSetColumnIndex(
-                    1
-                );
-
-                ImGui::Text(
-                    "%d",
-                    item.quantity
-                );
-
-                ImGui::TableSetColumnIndex(
-                    2
-                );
-
-                ImGui::Text(
-                    "%d",
-                    item.capacity
-                );
-
-                ImGui::TableSetColumnIndex(
-                    3
-                );
-
-                if (
-                    item.quantity <=
-                    item.minStock
-                )
-                {
-                    ImGui::TextColored(
-                        ImVec4(
-                            1.0f,
-                            0.35f,
-                            0.35f,
-                            1.0f
-                        ),
-                        "LOW"
-                    );
-                }
-                else
-                {
-                    ImGui::TextColored(
-                        ImVec4(
-                            0.35f,
-                            1.0f,
-                            0.45f,
-                            1.0f
-                        ),
-                        "OK"
-                    );
-                }
-            }
-
-            ImGui::EndTable();
-        }
-
-        if (
-            selectedStoreInventory_.empty()
-        )
-        {
-            ImGui::Spacing();
-
-            ImGui::Text(
-                "No products found."
-            );
-        }
-
-        ImGui::Spacing();
-
-        ImGui::Text(
-            "Current order:"
-        );
-
-        ImGui::Text(
-            "No active order"
-        );
-    }
+}
+    
 
     ImGui::End();
 }
@@ -1934,6 +1837,21 @@ refreshSelectedStoreData()
         backend_->getStoreInventory(
             selectedStoreId_
         );
+}
+void SimulationScreen::refreshWarehouseData()
+{
+    warehouseInventory_.clear();
+
+    if (
+        backend_ == nullptr ||
+        !backend_->isReady()
+    )
+    {
+        return;
+    }
+
+    warehouseInventory_ =
+        backend_->getWarehouseInventory();
 }
 void SimulationScreen::refreshSupplierData()
 {

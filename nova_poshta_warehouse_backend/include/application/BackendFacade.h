@@ -20,6 +20,14 @@ struct ProductStockInfo
     int capacity{};
     int minStock{};
 };
+struct WarehouseStockInfo
+{
+    int productId{};
+    std::string productName;
+    int quantity{};
+    int capacity{};
+    int minStock{};
+};
 struct SupplierRequestInfo
 {
     int id{};
@@ -45,6 +53,8 @@ public:
 
     std::vector<ProductStockInfo>
     getStoreInventory(int storeId) const;
+    std::vector<WarehouseStockInfo>
+    getWarehouseInventory() const;
     std::vector<SupplierRequestInfo>
     getSupplierRequests() const;
 

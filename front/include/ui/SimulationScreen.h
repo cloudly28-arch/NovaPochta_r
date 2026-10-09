@@ -142,6 +142,7 @@ private:
     void drawInfoPanel();
 
     void refreshSelectedStoreData();
+    void refreshWarehouseData();
     void refreshSupplierData();
     void updateVehicles(
         float deltaTime
@@ -213,4 +214,6 @@ private:
         selectedStoreInventory_;
     std::vector<SupplierRequestInfo>
         supplierRequests_;
+    std::vector<WarehouseStockInfo>
+        warehouseInventory_;
 };
