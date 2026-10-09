@@ -31,32 +31,34 @@ bool Database::isOpen() const { return db_ != nullptr; }
 
 bool Database::loadWarehouse(Warehouse& warehouse) const {
     if (!db_) return false;
-
     sqlite3_stmt* stmt = nullptr;
     if (sqlite3_prepare_v2(db_, "SELECT id,name,address FROM warehouses ORDER BY id LIMIT 1", -1, &stmt, nullptr) != SQLITE_OK) return false;
-    if (sqlite3_step(stmt) != SQLITE_ROW) {
-        sqlite3_finalize(stmt);
-        return false;
-    }
+    if (sqlite3_step(stmt) != SQLITE_ROW) { sqlite3_finalize(stmt); return false; }
     const auto* warehouseName = sqlite3_column_text(stmt, 1);
     const auto* warehouseAddress = sqlite3_column_text(stmt, 2);
-    warehouse = Warehouse(sqlite3_column_int(stmt, 0),
-                          warehouseName ? reinterpret_cast<const char*>(warehouseName) : "Warehouse",
-                          warehouseAddress ? reinterpret_cast<const char*>(warehouseAddress) : "");
+    warehouse = Warehouse(sqlite3_column_int(stmt, 0), warehouseName ? reinterpret_cast<const char*>(warehouseName) : "Warehouse", warehouseAddress ? reinterpret_cast<const char*>(warehouseAddress) : "");
     sqlite3_finalize(stmt);
 
-    if (sqlite3_prepare_v2(db_, "SELECT id,name,category FROM products ORDER BY id", -1, &stmt, nullptr) != SQLITE_OK) return false;
+    const char* productSql = "SELECT id,name,category,unit_name,units_per_package,price_per_unit,shelf_life_days FROM products ORDER BY id";
+    if (sqlite3_prepare_v2(db_, productSql, -1, &stmt, nullptr) != SQLITE_OK) return false;
     while (sqlite3_step(stmt) == SQLITE_ROW) {
+        const auto* name = sqlite3_column_text(stmt,1);
+        const auto* category = sqlite3_column_text(stmt,2);
+        const auto* unit = sqlite3_column_text(stmt,3);
         warehouse.addProduct(Product(sqlite3_column_int(stmt,0),
-                                     reinterpret_cast<const char*>(sqlite3_column_text(stmt,1)),
-                                     reinterpret_cast<const char*>(sqlite3_column_text(stmt,2))));
+                                     name ? reinterpret_cast<const char*>(name) : "",
+                                     category ? reinterpret_cast<const char*>(category) : "",
+                                     "", 0.0, 0.0,
+                                     unit ? reinterpret_cast<const char*>(unit) : "шт",
+                                     sqlite3_column_int(stmt,4),
+                                     sqlite3_column_double(stmt,5),
+                                     sqlite3_column_int(stmt,6)));
     }
     sqlite3_finalize(stmt);
 
     if (sqlite3_prepare_v2(db_, "SELECT id,name FROM stores ORDER BY id", -1, &stmt, nullptr) != SQLITE_OK) return false;
     while (sqlite3_step(stmt) == SQLITE_ROW) {
-        warehouse.addStore(Store(sqlite3_column_int(stmt,0),
-                                 reinterpret_cast<const char*>(sqlite3_column_text(stmt,1))));
+        warehouse.addStore(Store(sqlite3_column_int(stmt,0), reinterpret_cast<const char*>(sqlite3_column_text(stmt,1))));
     }
     sqlite3_finalize(stmt);
 
@@ -103,9 +105,9 @@ bool Database::setWarehouseQuantity(int warehouseId, int productId, int quantity
 bool Database::changeWarehouseQuantity(int warehouseId, int productId, int delta) {
     if (!db_) return false;
     sqlite3_stmt* stmt = nullptr;
-    const char* sql = "UPDATE warehouse_inventory SET quantity=quantity+? WHERE warehouse_id=? AND product_id=? AND quantity+?>=0";
+    const char* sql = "UPDATE warehouse_inventory SET quantity=quantity+? WHERE warehouse_id=? AND product_id=? AND quantity+?>=0 AND quantity+?<=capacity";
     if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) != SQLITE_OK) return false;
-    sqlite3_bind_int(stmt,1,delta); sqlite3_bind_int(stmt,2,warehouseId); sqlite3_bind_int(stmt,3,productId); sqlite3_bind_int(stmt,4,delta);
+    sqlite3_bind_int(stmt,1,delta); sqlite3_bind_int(stmt,2,warehouseId); sqlite3_bind_int(stmt,3,productId); sqlite3_bind_int(stmt,4,delta); sqlite3_bind_int(stmt,5,delta);
     const bool ok = sqlite3_step(stmt) == SQLITE_DONE && sqlite3_changes(db_) > 0;
     sqlite3_finalize(stmt); return ok;
 }

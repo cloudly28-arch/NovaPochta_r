@@ -1,141 +1,27 @@
 BEGIN TRANSACTION;
 CREATE TABLE products (
-    id INTEGER PRIMARY KEY,
-    name TEXT NOT NULL UNIQUE,
-    category TEXT NOT NULL
+ id INTEGER PRIMARY KEY,
+ name TEXT NOT NULL UNIQUE,
+ category TEXT NOT NULL,
+ unit_name TEXT NOT NULL DEFAULT 'шт',
+ units_per_package INTEGER NOT NULL DEFAULT 1 CHECK(units_per_package > 0),
+ price_per_unit REAL NOT NULL DEFAULT 0 CHECK(price_per_unit >= 0),
+ shelf_life_days INTEGER NOT NULL DEFAULT 0 CHECK(shelf_life_days >= 0)
 );
-INSERT INTO "products" VALUES(1,'Молоко','Пищевой');
-INSERT INTO "products" VALUES(2,'Хлеб','Пищевой');
-INSERT INTO "products" VALUES(3,'Яблоки','Пищевой');
-INSERT INTO "products" VALUES(4,'Бананы','Пищевой');
-INSERT INTO "products" VALUES(5,'Картофель','Пищевой');
-INSERT INTO "products" VALUES(6,'Куриное филе','Пищевой');
-INSERT INTO "products" VALUES(7,'Сосиски','Пищевой');
-INSERT INTO "products" VALUES(8,'Шоколад','Пищевой');
-INSERT INTO "products" VALUES(9,'Печенье','Пищевой');
-INSERT INTO "products" VALUES(10,'Сок','Пищевой');
-INSERT INTO "products" VALUES(11,'Сыр','Пищевой');
-INSERT INTO "products" VALUES(12,'Йогурт','Пищевой');
-INSERT INTO "products" VALUES(13,'Мука','Пищевой');
-INSERT INTO "products" VALUES(14,'Средство для мытья посуды','Бытовая химия');
-INSERT INTO "products" VALUES(15,'Стиральный порошок','Бытовая химия');
-INSERT INTO "products" VALUES(16,'Батарейки','Электроника');
-INSERT INTO "products" VALUES(17,'USB-кабель','Электроника');
-INSERT INTO "products" VALUES(18,'Бумага A4','Канцелярия');
-INSERT INTO "products" VALUES(19,'Ручки','Канцелярия');
-INSERT INTO "products" VALUES(20,'Картонные коробки','Упаковка');
-CREATE TABLE store_inventory (
-    store_id INTEGER NOT NULL,
-    product_id INTEGER NOT NULL,
-    quantity INTEGER NOT NULL DEFAULT 0 CHECK(quantity >= 0),
-    capacity INTEGER NOT NULL CHECK(capacity >= 0),
-    min_stock INTEGER NOT NULL DEFAULT 0 CHECK(min_stock >= 0),
-    PRIMARY KEY (store_id, product_id),
-    FOREIGN KEY (store_id) REFERENCES stores(id) ON DELETE CASCADE,
-    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
-);
-INSERT INTO "store_inventory" VALUES(1,1,70,120,20);
-INSERT INTO "store_inventory" VALUES(1,2,35,80,15);
-INSERT INTO "store_inventory" VALUES(1,11,30,60,10);
-INSERT INTO "store_inventory" VALUES(2,3,90,150,30);
-INSERT INTO "store_inventory" VALUES(2,4,85,130,25);
-INSERT INTO "store_inventory" VALUES(2,5,140,200,40);
-INSERT INTO "store_inventory" VALUES(3,2,55,100,20);
-INSERT INTO "store_inventory" VALUES(3,13,50,90,15);
-INSERT INTO "store_inventory" VALUES(3,1,40,75,15);
-INSERT INTO "store_inventory" VALUES(4,6,65,110,20);
-INSERT INTO "store_inventory" VALUES(4,7,50,95,20);
-INSERT INTO "store_inventory" VALUES(4,11,35,70,15);
-INSERT INTO "store_inventory" VALUES(5,8,95,140,25);
-INSERT INTO "store_inventory" VALUES(5,9,110,160,30);
-INSERT INTO "store_inventory" VALUES(5,10,75,120,20);
-INSERT INTO "store_inventory" VALUES(6,1,55,100,20);
-INSERT INTO "store_inventory" VALUES(6,12,45,90,20);
-INSERT INTO "store_inventory" VALUES(6,2,40,85,15);
-INSERT INTO "store_inventory" VALUES(7,14,45,70,10);
-INSERT INTO "store_inventory" VALUES(7,15,35,65,10);
-INSERT INTO "store_inventory" VALUES(7,20,80,120,20);
-INSERT INTO "store_inventory" VALUES(8,16,65,100,20);
-INSERT INTO "store_inventory" VALUES(8,17,45,75,15);
-INSERT INTO "store_inventory" VALUES(8,20,60,90,15);
-INSERT INTO "store_inventory" VALUES(9,18,85,130,25);
-INSERT INTO "store_inventory" VALUES(9,19,120,180,30);
-INSERT INTO "store_inventory" VALUES(9,20,70,100,20);
-CREATE TABLE stores (
-    id INTEGER PRIMARY KEY,
-    name TEXT NOT NULL UNIQUE
-);
-INSERT INTO "stores" VALUES(1,'FreshMart');
-INSERT INTO "stores" VALUES(2,'Green Basket');
-INSERT INTO "stores" VALUES(3,'Bakery House');
-INSERT INTO "stores" VALUES(4,'MeatPoint');
-INSERT INTO "stores" VALUES(5,'Sweet Corner');
-INSERT INTO "stores" VALUES(6,'Daily Food');
-INSERT INTO "stores" VALUES(7,'CleanHome');
-INSERT INTO "stores" VALUES(8,'TechBox');
-INSERT INTO "stores" VALUES(9,'PaperLine');
-CREATE TABLE warehouse_inventory (
-    warehouse_id INTEGER NOT NULL,
-    product_id INTEGER NOT NULL,
-    quantity INTEGER NOT NULL DEFAULT 0 CHECK(quantity >= 0),
-    capacity INTEGER NOT NULL CHECK(capacity >= 0),
-    min_stock INTEGER NOT NULL DEFAULT 0 CHECK(min_stock >= 0),
-    PRIMARY KEY (warehouse_id, product_id),
-    FOREIGN KEY (warehouse_id) REFERENCES warehouses(id) ON DELETE CASCADE,
-    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
-);
-INSERT INTO "warehouse_inventory" VALUES(1,1,325,575,100);
-INSERT INTO "warehouse_inventory" VALUES(1,2,350,600,100);
-INSERT INTO "warehouse_inventory" VALUES(1,3,375,625,100);
-INSERT INTO "warehouse_inventory" VALUES(1,4,400,650,100);
-INSERT INTO "warehouse_inventory" VALUES(1,5,300,550,100);
-INSERT INTO "warehouse_inventory" VALUES(1,6,325,575,100);
-INSERT INTO "warehouse_inventory" VALUES(1,7,350,600,100);
-INSERT INTO "warehouse_inventory" VALUES(1,8,375,625,100);
-INSERT INTO "warehouse_inventory" VALUES(1,9,400,650,100);
-INSERT INTO "warehouse_inventory" VALUES(1,10,300,550,100);
-INSERT INTO "warehouse_inventory" VALUES(1,11,325,575,100);
-INSERT INTO "warehouse_inventory" VALUES(1,12,350,600,100);
-INSERT INTO "warehouse_inventory" VALUES(1,13,375,625,100);
-INSERT INTO "warehouse_inventory" VALUES(1,14,280,530,60);
-INSERT INTO "warehouse_inventory" VALUES(1,15,180,430,60);
-INSERT INTO "warehouse_inventory" VALUES(1,16,205,455,60);
-INSERT INTO "warehouse_inventory" VALUES(1,17,230,480,60);
-INSERT INTO "warehouse_inventory" VALUES(1,18,255,505,60);
-INSERT INTO "warehouse_inventory" VALUES(1,19,280,530,60);
-INSERT INTO "warehouse_inventory" VALUES(1,20,180,430,60);
-CREATE TABLE warehouses (
-    id INTEGER PRIMARY KEY,
-    name TEXT NOT NULL,
-    address TEXT
-);
-INSERT INTO "warehouses" VALUES(1,'Центральный склад Nova Poshta','Основной учебный склад');
-CREATE VIEW store_inventory_view AS
-SELECT
-    s.id AS store_id,
-    s.name AS store_name,
-    p.id AS product_id,
-    p.name AS product_name,
-    p.category,
-    si.quantity,
-    si.capacity,
-    si.min_stock,
-    (si.capacity - si.quantity) AS free_capacity
-FROM store_inventory si
-JOIN stores s ON s.id = si.store_id
-JOIN products p ON p.id = si.product_id;
-CREATE VIEW warehouse_inventory_view AS
-SELECT
-    w.id AS warehouse_id,
-    w.name AS warehouse_name,
-    p.id AS product_id,
-    p.name AS product_name,
-    p.category,
-    wi.quantity,
-    wi.capacity,
-    wi.min_stock,
-    (wi.capacity - wi.quantity) AS free_capacity
-FROM warehouse_inventory wi
-JOIN warehouses w ON w.id = wi.warehouse_id
-JOIN products p ON p.id = wi.product_id;
+INSERT INTO products VALUES
+(1,'Молоко','Пищевой','пачка',12,85.00,7),(2,'Хлеб','Пищевой','шт',10,45.00,5),(3,'Яблоки','Пищевой','кг',10,120.00,20),(4,'Бананы','Пищевой','кг',10,110.00,14),(5,'Картофель','Пищевой','кг',25,55.00,60),(6,'Куриное филе','Пищевой','кг',10,320.00,7),(7,'Сосиски','Пищевой','пачка',12,180.00,14),(8,'Шоколад','Пищевой','шт',20,95.00,180),(9,'Печенье','Пищевой','пачка',16,90.00,120),(10,'Сок','Пищевой','пачка',12,130.00,180),(11,'Сыр','Пищевой','кг',8,650.00,30),(12,'Йогурт','Пищевой','шт',12,75.00,10),(13,'Мука','Пищевой','пачка',10,70.00,365),(14,'Средство для мытья посуды','Бытовая химия','шт',12,160.00,0),(15,'Стиральный порошок','Бытовая химия','шт',8,420.00,0),(16,'Батарейки','Электроника','упаковка',10,250.00,0),(17,'USB-кабель','Электроника','шт',20,300.00,0),(18,'Бумага A4','Канцелярия','пачка',5,350.00,0),(19,'Ручки','Канцелярия','шт',50,35.00,0),(20,'Картонные коробки','Упаковка','шт',25,40.00,0);
+CREATE TABLE stores (id INTEGER PRIMARY KEY,name TEXT NOT NULL UNIQUE);
+INSERT INTO stores VALUES(1,'FreshMart'),(2,'Green Basket'),(3,'Bakery House'),(4,'MeatPoint'),(5,'Sweet Corner'),(6,'Daily Food'),(7,'CleanHome'),(8,'TechBox'),(9,'PaperLine');
+CREATE TABLE warehouses (id INTEGER PRIMARY KEY,name TEXT NOT NULL,address TEXT);
+INSERT INTO warehouses VALUES(1,'Центральный склад Nova Poshta','Основной учебный склад');
+CREATE TABLE store_inventory (store_id INTEGER NOT NULL,product_id INTEGER NOT NULL,quantity INTEGER NOT NULL DEFAULT 0 CHECK(quantity>=0),capacity INTEGER NOT NULL CHECK(capacity>=0),min_stock INTEGER NOT NULL DEFAULT 0 CHECK(min_stock>=0),PRIMARY KEY(store_id,product_id),FOREIGN KEY(store_id) REFERENCES stores(id) ON DELETE CASCADE,FOREIGN KEY(product_id) REFERENCES products(id) ON DELETE CASCADE);
+INSERT INTO store_inventory VALUES(1,1,70,120,20),(1,2,35,80,15),(1,11,30,60,10),(2,3,90,150,30),(2,4,85,130,25),(2,5,140,200,40),(3,2,55,100,20),(3,13,50,90,15),(3,1,40,75,15),(4,6,65,110,20),(4,7,50,95,20),(4,11,35,70,15),(5,8,95,140,25),(5,9,110,160,30),(5,10,75,120,20),(6,1,55,100,20),(6,12,45,90,20),(6,2,40,85,15),(7,14,45,70,10),(7,15,35,65,10),(7,20,80,120,20),(8,16,65,100,20),(8,17,45,75,15),(8,20,60,90,15),(9,18,85,130,25),(9,19,120,180,30),(9,20,70,100,20);
+CREATE TABLE warehouse_inventory (warehouse_id INTEGER NOT NULL,product_id INTEGER NOT NULL,quantity INTEGER NOT NULL DEFAULT 0 CHECK(quantity>=0),capacity INTEGER NOT NULL CHECK(capacity>=0),min_stock INTEGER NOT NULL DEFAULT 0 CHECK(min_stock>=0),PRIMARY KEY(warehouse_id,product_id),FOREIGN KEY(warehouse_id) REFERENCES warehouses(id) ON DELETE CASCADE,FOREIGN KEY(product_id) REFERENCES products(id) ON DELETE CASCADE);
+INSERT INTO warehouse_inventory VALUES(1,1,325,575,100),(1,2,350,600,100),(1,3,375,625,100),(1,4,400,650,100),(1,5,300,550,100),(1,6,325,575,100),(1,7,350,600,100),(1,8,375,625,100),(1,9,400,650,100),(1,10,300,550,100),(1,11,325,575,100),(1,12,350,600,100),(1,13,375,625,100),(1,14,280,530,60),(1,15,180,430,60),(1,16,205,455,60),(1,17,230,480,60),(1,18,255,505,60),(1,19,280,530,60),(1,20,180,430,60);
+CREATE TABLE orders (id INTEGER PRIMARY KEY AUTOINCREMENT,store_id INTEGER NOT NULL,created_day INTEGER NOT NULL CHECK(created_day>0),delivery_day INTEGER NOT NULL CHECK(delivery_day>created_day),status TEXT NOT NULL DEFAULT 'Created',FOREIGN KEY(store_id) REFERENCES stores(id) ON DELETE CASCADE);
+CREATE UNIQUE INDEX idx_one_order_per_store_per_day ON orders(store_id,created_day);
+CREATE TABLE order_items (order_id INTEGER NOT NULL,product_id INTEGER NOT NULL,requested_quantity INTEGER NOT NULL CHECK(requested_quantity>0),allocated_quantity INTEGER NOT NULL DEFAULT 0 CHECK(allocated_quantity>=0),package_count INTEGER NOT NULL DEFAULT 0 CHECK(package_count>=0),PRIMARY KEY(order_id,product_id),FOREIGN KEY(order_id) REFERENCES orders(id) ON DELETE CASCADE,FOREIGN KEY(product_id) REFERENCES products(id) ON DELETE RESTRICT);
+CREATE TABLE supplier_requests (id INTEGER PRIMARY KEY AUTOINCREMENT,product_id INTEGER NOT NULL,requested_quantity INTEGER NOT NULL CHECK(requested_quantity>0),created_day INTEGER NOT NULL CHECK(created_day>0),delivery_day INTEGER,status TEXT NOT NULL DEFAULT 'Created',FOREIGN KEY(product_id) REFERENCES products(id) ON DELETE RESTRICT);
+CREATE VIEW store_inventory_view AS SELECT s.id AS store_id,s.name AS store_name,p.id AS product_id,p.name AS product_name,p.category,p.unit_name,p.units_per_package,p.price_per_unit,p.shelf_life_days,si.quantity,si.capacity,si.min_stock,(si.capacity-si.quantity) AS free_capacity FROM store_inventory si JOIN stores s ON s.id=si.store_id JOIN products p ON p.id=si.product_id;
+CREATE VIEW warehouse_inventory_view AS SELECT w.id AS warehouse_id,w.name AS warehouse_name,p.id AS product_id,p.name AS product_name,p.category,p.unit_name,p.units_per_package,p.price_per_unit,p.shelf_life_days,wi.quantity,wi.capacity,wi.min_stock,(wi.capacity-wi.quantity) AS free_capacity FROM warehouse_inventory wi JOIN warehouses w ON w.id=wi.warehouse_id JOIN products p ON p.id=wi.product_id;
 COMMIT;

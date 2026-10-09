@@ -2,11 +2,20 @@ cmake_minimum_required(VERSION 3.16)
 
 project(NovaPoshtaWarehouseBackend LANGUAGES CXX)
 
+include(FetchContent)
+
+FetchContent_Declare(
+    sqlite3
+    GIT_REPOSITORY https://github.com/underclocked/sqlite.git
+    GIT_TAG master
+)
+
+FetchContent_MakeAvailable(sqlite3)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-find_package(SQLite3 REQUIRED)
 
 add_library(nova_warehouse_backend
     src/Warehouse.cpp
@@ -41,7 +50,7 @@ target_include_directories(
 target_link_libraries(
     nova_warehouse_backend
     PUBLIC
-    SQLite3::SQLite3
+    SQLite3
 )
 
 add_executable(
