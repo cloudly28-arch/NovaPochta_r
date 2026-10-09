@@ -20,6 +20,19 @@ struct ProductStockInfo
     int capacity{};
     int minStock{};
 };
+struct SupplierRequestInfo
+{
+    int id{};
+    int productId{};
+
+    std::string productName;
+
+    int requestedQuantity{};
+    int createdDay{};
+    int deliveryDay{};
+
+    std::string status;
+};
 
 class BackendFacade
 {
@@ -32,6 +45,19 @@ public:
 
     std::vector<ProductStockInfo>
     getStoreInventory(int storeId) const;
+    std::vector<SupplierRequestInfo>
+    getSupplierRequests() const;
+
+    bool createSupplierRequest(
+        int productId,
+        int quantity,
+        int currentDay,
+        int deliveryDay
+    );
+
+    bool completeSupplierRequest(
+        int requestId
+    );
 
 private:
     Database database_;

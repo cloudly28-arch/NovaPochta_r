@@ -113,3 +113,102 @@ BackendFacade::getStoreInventory(
 
     return result;
 }
+
+std::vector<SupplierRequestInfo>
+BackendFacade::getSupplierRequests() const
+{
+    std::vector<SupplierRequestInfo> result;
+
+    if (!ready_)
+    {
+        return result;
+    }
+
+    const std::vector<SupplierRequestRow> rows =
+        database_.getSupplierRequests();
+
+    result.reserve(rows.size());
+
+    for (const SupplierRequestRow& row : rows)
+    {
+        result.push_back(
+            SupplierRequestInfo{
+                row.id,
+                row.productId,
+                row.productName,
+                row.requestedQuantity,
+                row.createdDay,
+                row.deliveryDay,
+                row.status
+            }
+        );
+    }
+
+    return result;
+}
+
+bool BackendFacade::createSupplierRequest(
+    int productId,
+    int quantity,
+    int currentDay,
+    int deliveryDay
+)
+{
+    if (!ready_)
+    {
+        return false;
+    }
+
+    return database_.createSupplierRequest(
+        productId,
+        quantity,
+        currentDay,
+        deliveryDay
+    );
+}
+
+bool BackendFacade::completeSupplierRequest(
+    int requestId
+)
+{
+    if (!ready_)
+    {
+        return false;
+    }
+
+    const std::vector<SupplierRequestRow> requests =
+        database_.getSupplierRequests();
+
+    for (const SupplierRequestRow& request : requests)
+    {
+        if (request.id != requestId)
+        {
+            continue;
+        }
+
+        if (request.status == "Delivered")
+        {
+            return true;
+        }
+
+        if (
+            !database_.changeWarehouseQuantity(
+                warehouse_.getId(),
+                request.productId,
+                request.requestedQuantity
+            )
+        )
+        {
+            return false;
+        }
+
+        return database_.setSupplierRequestStatus(
+            request.id,
+            "Delivered"
+        );
+    }
+
+    return false;
+}
+
+

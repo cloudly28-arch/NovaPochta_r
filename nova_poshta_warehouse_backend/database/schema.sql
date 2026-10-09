@@ -138,4 +138,26 @@ SELECT
 FROM warehouse_inventory wi
 JOIN warehouses w ON w.id = wi.warehouse_id
 JOIN products p ON p.id = wi.product_id;
+CREATE TABLE supplier_requests
+(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    product_id INTEGER NOT NULL,
+
+    requested_quantity INTEGER NOT NULL
+        CHECK(requested_quantity > 0),
+
+    created_day INTEGER NOT NULL
+        CHECK(created_day > 0),
+
+    delivery_day INTEGER NOT NULL
+        CHECK(delivery_day > created_day),
+
+    status TEXT NOT NULL
+        DEFAULT 'Created',
+
+    FOREIGN KEY (product_id)
+        REFERENCES products(id)
+        ON DELETE RESTRICT
+);
 COMMIT;

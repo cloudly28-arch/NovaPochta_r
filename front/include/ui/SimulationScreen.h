@@ -36,7 +36,8 @@ private:
     {
         None,
         Warehouse,
-        Store
+        Store,
+        Supplier
     };
 
     enum class SimulationState
@@ -51,6 +52,11 @@ private:
     {
         ToStore,
         ToWarehouse
+    };
+    enum class VehicleType
+    {
+        StoreDelivery,
+        SupplierDelivery
     };
 
     struct StoreView
@@ -71,9 +77,23 @@ private:
         VehicleDirection direction =
             VehicleDirection::ToStore;
 
+        VehicleType type =
+            VehicleType::StoreDelivery;
+
         bool active = false;
 
         float startDelay = 0.0f;
+    };
+
+    struct SupplierTruckView
+    {
+        sf::Vector2f position;
+
+        float progress = 0.0f;
+
+        bool active = false;
+
+        bool returning = false;
     };
 
 private:
@@ -95,6 +115,17 @@ private:
     void drawWarehouse(
         sf::RenderWindow& window
     );
+    void drawSupplier(
+        sf::RenderWindow& window
+    );
+
+    void drawSupplierRoute(
+        sf::RenderWindow& window
+    );
+
+    void drawSupplierTruck(
+        sf::RenderWindow& window
+    );
 
     void drawStores(
         sf::RenderWindow& window
@@ -111,8 +142,11 @@ private:
     void drawInfoPanel();
 
     void refreshSelectedStoreData();
-
+    void refreshSupplierData();
     void updateVehicles(
+        float deltaTime
+    );
+    void updateSupplierTruck(
         float deltaTime
     );
 
@@ -131,6 +165,12 @@ private:
         500.0f,
         360.0f
     };
+    const sf::Vector2f supplierCenter_{
+        120.0f,
+        150.0f
+    };
+
+    sf::FloatRect supplierBounds_;
 
     SelectedObjectType selectedType_ =
         SelectedObjectType::None;
@@ -143,6 +183,7 @@ private:
         SimulationState::Stopped;
 
     std::vector<VehicleView> vehicles_;
+    SupplierTruckView supplierTruck_;
 
     float simulationSpeed_ = 1.0f;
     int currentDay_ = 1;
@@ -170,4 +211,6 @@ private:
 
     std::vector<ProductStockInfo>
         selectedStoreInventory_;
+    std::vector<SupplierRequestInfo>
+        supplierRequests_;
 };

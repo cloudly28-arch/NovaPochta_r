@@ -91,6 +91,359 @@ std::vector<StoreStockRow> Database::getStoreInventory(int storeId) const {
     sqlite3_finalize(stmt);
     return result;
 }
+std::vector<WarehouseStockRow>
+Database::getWarehouseInventory(
+    int warehouseId
+) const
+{
+    std::vector<WarehouseStockRow> result;
+
+    if (!db_)
+    {
+        return result;
+    }
+
+    const char* sql =
+        "SELECT "
+        "warehouse_id, "
+        "product_id, "
+        "product_name, "
+        "quantity, "
+        "capacity, "
+        "min_stock "
+        "FROM warehouse_inventory_view "
+        "WHERE warehouse_id=? "
+        "ORDER BY product_id";
+
+    sqlite3_stmt* stmt = nullptr;
+
+    if (
+        sqlite3_prepare_v2(
+            db_,
+            sql,
+            -1,
+            &stmt,
+            nullptr
+        ) != SQLITE_OK
+    )
+    {
+        return result;
+    }
+
+    sqlite3_bind_int(
+        stmt,
+        1,
+        warehouseId
+    );
+
+    while (
+        sqlite3_step(stmt) ==
+        SQLITE_ROW
+    )
+    {
+        WarehouseStockRow row;
+
+        row.warehouseId =
+            sqlite3_column_int(
+                stmt,
+                0
+            );
+
+        row.productId =
+            sqlite3_column_int(
+                stmt,
+                1
+            );
+
+        const auto* productName =
+            sqlite3_column_text(
+                stmt,
+                2
+            );
+
+        row.productName =
+            productName
+                ? reinterpret_cast<const char*>(
+                    productName
+                )
+                : "";
+
+        row.quantity =
+            sqlite3_column_int(
+                stmt,
+                3
+            );
+
+        row.capacity =
+            sqlite3_column_int(
+                stmt,
+                4
+            );
+
+        row.minStock =
+            sqlite3_column_int(
+                stmt,
+                5
+            );
+
+        result.push_back(
+            std::move(row)
+        );
+    }
+
+    sqlite3_finalize(stmt);
+
+    return result;
+}
+
+bool Database::createSupplierRequest(
+    int productId,
+    int requestedQuantity,
+    int createdDay,
+    int deliveryDay
+)
+{
+    if (
+        !db_ ||
+        productId <= 0 ||
+        requestedQuantity <= 0 ||
+        createdDay <= 0 ||
+        deliveryDay <= createdDay
+    )
+    {
+        return false;
+    }
+
+    const char* sql =
+        "INSERT INTO supplier_requests "
+        "("
+        "product_id, "
+        "requested_quantity, "
+        "created_day, "
+        "delivery_day, "
+        "status"
+        ") "
+        "VALUES (?, ?, ?, ?, 'Created')";
+
+    sqlite3_stmt* stmt = nullptr;
+
+    if (
+        sqlite3_prepare_v2(
+            db_,
+            sql,
+            -1,
+            &stmt,
+            nullptr
+        ) != SQLITE_OK
+    )
+    {
+        return false;
+    }
+
+    sqlite3_bind_int(
+        stmt,
+        1,
+        productId
+    );
+
+    sqlite3_bind_int(
+        stmt,
+        2,
+        requestedQuantity
+    );
+
+    sqlite3_bind_int(
+        stmt,
+        3,
+        createdDay
+    );
+
+    sqlite3_bind_int(
+        stmt,
+        4,
+        deliveryDay
+    );
+
+    const bool ok =
+        sqlite3_step(stmt) ==
+        SQLITE_DONE;
+
+    sqlite3_finalize(stmt);
+
+    return ok;
+}
+
+std::vector<SupplierRequestRow>
+Database::getSupplierRequests() const
+{
+    std::vector<SupplierRequestRow> result;
+
+    if (!db_)
+    {
+        return result;
+    }
+
+    const char* sql =
+        "SELECT "
+        "sr.id, "
+        "sr.product_id, "
+        "p.name, "
+        "sr.requested_quantity, "
+        "sr.created_day, "
+        "sr.delivery_day, "
+        "sr.status "
+        "FROM supplier_requests sr "
+        "JOIN products p "
+        "ON p.id = sr.product_id "
+        "ORDER BY sr.id";
+
+    sqlite3_stmt* stmt = nullptr;
+
+    if (
+        sqlite3_prepare_v2(
+            db_,
+            sql,
+            -1,
+            &stmt,
+            nullptr
+        ) != SQLITE_OK
+    )
+    {
+        return result;
+    }
+
+    while (
+        sqlite3_step(stmt) ==
+        SQLITE_ROW
+    )
+    {
+        SupplierRequestRow row;
+
+        row.id =
+            sqlite3_column_int(
+                stmt,
+                0
+            );
+
+        row.productId =
+            sqlite3_column_int(
+                stmt,
+                1
+            );
+
+        const auto* productName =
+            sqlite3_column_text(
+                stmt,
+                2
+            );
+
+        row.productName =
+            productName
+                ? reinterpret_cast<const char*>(
+                    productName
+                )
+                : "";
+
+        row.requestedQuantity =
+            sqlite3_column_int(
+                stmt,
+                3
+            );
+
+        row.createdDay =
+            sqlite3_column_int(
+                stmt,
+                4
+            );
+
+        row.deliveryDay =
+            sqlite3_column_int(
+                stmt,
+                5
+            );
+
+        const auto* status =
+            sqlite3_column_text(
+                stmt,
+                6
+            );
+
+        row.status =
+            status
+                ? reinterpret_cast<const char*>(
+                    status
+                )
+                : "";
+
+        result.push_back(
+            std::move(row)
+        );
+    }
+
+    sqlite3_finalize(stmt);
+
+    return result;
+}
+
+bool Database::setSupplierRequestStatus(
+    int requestId,
+    const std::string& status
+)
+{
+    if (
+        !db_ ||
+        requestId <= 0 ||
+        status.empty()
+    )
+    {
+        return false;
+    }
+
+    const char* sql =
+        "UPDATE supplier_requests "
+        "SET status=? "
+        "WHERE id=?";
+
+    sqlite3_stmt* stmt = nullptr;
+
+    if (
+        sqlite3_prepare_v2(
+            db_,
+            sql,
+            -1,
+            &stmt,
+            nullptr
+        ) != SQLITE_OK
+    )
+    {
+        return false;
+    }
+
+    sqlite3_bind_text(
+        stmt,
+        1,
+        status.c_str(),
+        -1,
+        SQLITE_TRANSIENT
+    );
+
+    sqlite3_bind_int(
+        stmt,
+        2,
+        requestId
+    );
+
+    const bool ok =
+        sqlite3_step(stmt) ==
+            SQLITE_DONE &&
+        sqlite3_changes(db_) > 0;
+
+    sqlite3_finalize(stmt);
+
+    return ok;
+}
+
+
 
 bool Database::setWarehouseQuantity(int warehouseId, int productId, int quantity) {
     if (!db_ || quantity < 0) return false;
