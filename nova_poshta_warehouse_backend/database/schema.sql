@@ -138,6 +138,53 @@ SELECT
 FROM warehouse_inventory wi
 JOIN warehouses w ON w.id = wi.warehouse_id
 JOIN products p ON p.id = wi.product_id;
+CREATE TABLE orders
+(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    store_id INTEGER NOT NULL,
+
+    created_day INTEGER NOT NULL
+        CHECK(created_day > 0),
+
+    delivery_day INTEGER NOT NULL
+        CHECK(delivery_day > created_day),
+
+    status TEXT NOT NULL
+        DEFAULT 'Created',
+
+    FOREIGN KEY (store_id)
+        REFERENCES stores(id)
+        ON DELETE CASCADE
+);
+
+
+CREATE TABLE order_items
+(
+    order_id INTEGER NOT NULL,
+    product_id INTEGER NOT NULL,
+
+    requested_quantity INTEGER NOT NULL
+        CHECK(requested_quantity > 0),
+
+    allocated_quantity INTEGER NOT NULL
+        DEFAULT 0
+        CHECK(allocated_quantity >= 0),
+
+    PRIMARY KEY
+    (
+        order_id,
+        product_id
+    ),
+
+    FOREIGN KEY (order_id)
+        REFERENCES orders(id)
+        ON DELETE CASCADE,
+
+    FOREIGN KEY (product_id)
+        REFERENCES products(id)
+        ON DELETE RESTRICT
+);
 CREATE TABLE supplier_requests
 (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

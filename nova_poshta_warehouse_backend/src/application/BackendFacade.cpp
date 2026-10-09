@@ -241,5 +241,60 @@ bool BackendFacade::completeSupplierRequest(
 
     return false;
 }
+bool BackendFacade::getActiveStoreOrder(
+    int storeId,
+    StoreOrderInfo& order
+) const
+{
+    if (!ready_)
+    {
+        return false;
+    }
 
+    StoreOrderRow row;
+
+    if (
+        !database_.getActiveStoreOrder(
+            storeId,
+            row
+        )
+    )
+    {
+        return false;
+    }
+
+    order.id =
+        row.id;
+
+    order.storeId =
+        row.storeId;
+
+    order.createdDay =
+        row.createdDay;
+
+    order.deliveryDay =
+        row.deliveryDay;
+
+    order.status =
+        row.status;
+
+    order.items.clear();
+
+    for (
+        const OrderItemRow& item :
+        row.items
+    )
+    {
+        order.items.push_back(
+            OrderItemInfo{
+                item.productId,
+                item.productName,
+                item.requestedQuantity,
+                item.allocatedQuantity
+            }
+        );
+    }
+
+    return true;
+}
 

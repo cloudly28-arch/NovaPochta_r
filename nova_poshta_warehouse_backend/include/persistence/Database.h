@@ -36,6 +36,27 @@ struct SupplierRequestRow
 
     std::string status;
 };
+struct OrderItemRow
+{
+    int productId{};
+    std::string productName;
+
+    int requestedQuantity{};
+    int allocatedQuantity{};
+};
+
+struct StoreOrderRow
+{
+    int id{};
+    int storeId{};
+
+    int createdDay{};
+    int deliveryDay{};
+
+    std::string status;
+
+    std::vector<OrderItemRow> items;
+};
 class Database {
 private:
     struct sqlite3* db_{nullptr};
@@ -79,4 +100,8 @@ public:
     bool beginTransaction();
     bool commit();
     bool rollback();
+    bool getActiveStoreOrder(
+        int storeId,
+        StoreOrderRow& order
+    ) const;
 };

@@ -91,6 +91,181 @@ std::vector<StoreStockRow> Database::getStoreInventory(int storeId) const {
     sqlite3_finalize(stmt);
     return result;
 }
+bool Database::getActiveStoreOrder(
+    int storeId,
+    StoreOrderRow& order
+) const
+{
+    if (
+        !db_ ||
+        storeId <= 0
+    )
+    {
+        return false;
+    }
+
+    const char* orderSql =
+        "SELECT "
+        "id, "
+        "store_id, "
+        "created_day, "
+        "delivery_day, "
+        "status "
+        "FROM orders "
+        "WHERE store_id=? "
+        "AND status NOT IN ('Completed', 'Cancelled') "
+        "ORDER BY id DESC "
+        "LIMIT 1";
+
+    sqlite3_stmt* stmt = nullptr;
+
+    if (
+        sqlite3_prepare_v2(
+            db_,
+            orderSql,
+            -1,
+            &stmt,
+            nullptr
+        ) != SQLITE_OK
+    )
+    {
+        return false;
+    }
+
+    sqlite3_bind_int(
+        stmt,
+        1,
+        storeId
+    );
+
+    if (
+        sqlite3_step(stmt) !=
+        SQLITE_ROW
+    )
+    {
+        sqlite3_finalize(stmt);
+        return false;
+    }
+
+    order.id =
+        sqlite3_column_int(
+            stmt,
+            0
+        );
+
+    order.storeId =
+        sqlite3_column_int(
+            stmt,
+            1
+        );
+
+    order.createdDay =
+        sqlite3_column_int(
+            stmt,
+            2
+        );
+
+    order.deliveryDay =
+        sqlite3_column_int(
+            stmt,
+            3
+        );
+
+    const auto* status =
+        sqlite3_column_text(
+            stmt,
+            4
+        );
+
+    order.status =
+        status
+            ? reinterpret_cast<const char*>(
+                status
+            )
+            : "";
+
+    sqlite3_finalize(stmt);
+
+    const char* itemSql =
+        "SELECT "
+        "oi.product_id, "
+        "p.name, "
+        "oi.requested_quantity, "
+        "oi.allocated_quantity "
+        "FROM order_items oi "
+        "JOIN products p "
+        "ON p.id = oi.product_id "
+        "WHERE oi.order_id=? "
+        "ORDER BY oi.product_id";
+
+    if (
+        sqlite3_prepare_v2(
+            db_,
+            itemSql,
+            -1,
+            &stmt,
+            nullptr
+        ) != SQLITE_OK
+    )
+    {
+        return false;
+    }
+
+    sqlite3_bind_int(
+        stmt,
+        1,
+        order.id
+    );
+
+    order.items.clear();
+
+    while (
+        sqlite3_step(stmt) ==
+        SQLITE_ROW
+    )
+    {
+        OrderItemRow item;
+
+        item.productId =
+            sqlite3_column_int(
+                stmt,
+                0
+            );
+
+        const auto* productName =
+            sqlite3_column_text(
+                stmt,
+                1
+            );
+
+        item.productName =
+            productName
+                ? reinterpret_cast<const char*>(
+                    productName
+                )
+                : "";
+
+        item.requestedQuantity =
+            sqlite3_column_int(
+                stmt,
+                2
+            );
+
+        item.allocatedQuantity =
+            sqlite3_column_int(
+                stmt,
+                3
+            );
+
+        order.items.push_back(
+            std::move(item)
+        );
+    }
+
+    sqlite3_finalize(stmt);
+
+    return true;
+}
 std::vector<WarehouseStockRow>
 Database::getWarehouseInventory(
     int warehouseId

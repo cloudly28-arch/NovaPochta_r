@@ -41,7 +41,27 @@ struct SupplierRequestInfo
 
     std::string status;
 };
+struct OrderItemInfo
+{
+    int productId{};
+    std::string productName;
 
+    int requestedQuantity{};
+    int allocatedQuantity{};
+};
+
+struct StoreOrderInfo
+{
+    int id{};
+    int storeId{};
+
+    int createdDay{};
+    int deliveryDay{};
+
+    std::string status;
+
+    std::vector<OrderItemInfo> items;
+};
 class BackendFacade
 {
 public:
@@ -68,6 +88,11 @@ public:
     bool completeSupplierRequest(
         int requestId
     );
+
+    bool getActiveStoreOrder(
+    int storeId,
+    StoreOrderInfo& order
+) const;
 
 private:
     Database database_;

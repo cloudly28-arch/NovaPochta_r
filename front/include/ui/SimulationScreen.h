@@ -216,4 +216,8 @@ private:
         supplierRequests_;
     std::vector<WarehouseStockInfo>
         warehouseInventory_;
+    StoreOrderInfo selectedStoreOrder_;
+
+    bool selectedStoreHasOrder_ =
+        false;
 };
