@@ -86,7 +86,9 @@ public:
 
     std::vector<SupplierRequestRow>
     getSupplierRequests() const;
-
+    bool hasActiveSupplierRequest(
+        int productId
+    ) const;
     bool setSupplierRequestStatus(
         int requestId,
         const std::string& status
@@ -115,4 +117,16 @@ public:
         int createdDay,
         int deliveryDay
     );
+    bool setOrderItemAllocated(
+        int orderId,
+        int productId,
+        int allocatedQuantity
+    );
+
+    bool setOrderStatus(
+        int orderId,
+        const std::string& status
+    );
+
+
 };

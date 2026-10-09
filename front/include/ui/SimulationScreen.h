@@ -185,6 +185,7 @@ private:
 
     std::vector<VehicleView> vehicles_;
     SupplierTruckView supplierTruck_;
+    int activeSupplierRequestId_ = -1;
 
     float simulationSpeed_ = 1.0f;
     int currentDay_ = 1;

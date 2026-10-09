@@ -559,7 +559,54 @@ Database::getSupplierRequests() const
 
     return result;
 }
+bool Database::hasActiveSupplierRequest(
+    int productId
+) const
+{
+    if (
+        !db_ ||
+        productId <= 0
+    )
+    {
+        return false;
+    }
 
+    const char* sql =
+        "SELECT 1 "
+        "FROM supplier_requests "
+        "WHERE product_id=? "
+        "AND status IN ('Created', 'InTransit') "
+        "LIMIT 1";
+
+    sqlite3_stmt* stmt = nullptr;
+
+    if (
+        sqlite3_prepare_v2(
+            db_,
+            sql,
+            -1,
+            &stmt,
+            nullptr
+        ) != SQLITE_OK
+    )
+    {
+        return false;
+    }
+
+    sqlite3_bind_int(
+        stmt,
+        1,
+        productId
+    );
+
+    const bool exists =
+        sqlite3_step(stmt) ==
+        SQLITE_ROW;
+
+    sqlite3_finalize(stmt);
+
+    return exists;
+}
 bool Database::setSupplierRequestStatus(
     int requestId,
     const std::string& status
@@ -624,18 +671,84 @@ bool Database::setWarehouseQuantity(int warehouseId, int productId, int quantity
     if (!db_ || quantity < 0) return false;
     sqlite3_stmt* stmt = nullptr;
     if (sqlite3_prepare_v2(db_, "UPDATE warehouse_inventory SET quantity=? WHERE warehouse_id=? AND product_id=?", -1, &stmt, nullptr) != SQLITE_OK) return false;
-    sqlite3_bind_int(stmt,1,quantity); sqlite3_bind_int(stmt,2,warehouseId); sqlite3_bind_int(stmt,3,productId);
+    sqlite3_bind_int(stmt,1,quantity);
+     sqlite3_bind_int(stmt,2,warehouseId);
+      sqlite3_bind_int(stmt,3,productId);
     const bool ok = sqlite3_step(stmt) == SQLITE_DONE && sqlite3_changes(db_) > 0;
     sqlite3_finalize(stmt); return ok;
 }
-bool Database::changeWarehouseQuantity(int warehouseId, int productId, int delta) {
-    if (!db_) return false;
+bool Database::changeWarehouseQuantity(
+    int warehouseId,
+    int productId,
+    int delta
+)
+{
+    if (!db_)
+    {
+        return false;
+    }
+
     sqlite3_stmt* stmt = nullptr;
-    const char* sql = "UPDATE warehouse_inventory SET quantity=quantity+? WHERE warehouse_id=? AND product_id=? AND quantity+?>=0";
-    if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) != SQLITE_OK) return false;
-    sqlite3_bind_int(stmt,1,delta); sqlite3_bind_int(stmt,2,warehouseId); sqlite3_bind_int(stmt,3,productId); sqlite3_bind_int(stmt,4,delta);
-    const bool ok = sqlite3_step(stmt) == SQLITE_DONE && sqlite3_changes(db_) > 0;
-    sqlite3_finalize(stmt); return ok;
+
+    const char* sql =
+        "UPDATE warehouse_inventory "
+        "SET quantity=quantity+? "
+        "WHERE warehouse_id=? "
+        "AND product_id=? "
+        "AND quantity+?>=0 "
+        "AND quantity+?<=capacity";
+
+    if (
+        sqlite3_prepare_v2(
+            db_,
+            sql,
+            -1,
+            &stmt,
+            nullptr
+        ) != SQLITE_OK
+    )
+    {
+        return false;
+    }
+
+    sqlite3_bind_int(
+        stmt,
+        1,
+        delta
+    );
+
+    sqlite3_bind_int(
+        stmt,
+        2,
+        warehouseId
+    );
+
+    sqlite3_bind_int(
+        stmt,
+        3,
+        productId
+    );
+
+    sqlite3_bind_int(
+        stmt,
+        4,
+        delta
+    );
+
+    sqlite3_bind_int(
+        stmt,
+        5,
+        delta
+    );
+
+    const bool ok =
+        sqlite3_step(stmt) ==
+            SQLITE_DONE &&
+        sqlite3_changes(db_) > 0;
+
+    sqlite3_finalize(stmt);
+
+    return ok;
 }
 bool Database::setStoreQuantity(int storeId, int productId, int quantity) {
     if (!db_ || quantity < 0) return false;
@@ -905,3 +1018,126 @@ bool Database::createStoreOrder(
 
     return true;
 }
+bool Database::setOrderItemAllocated(
+    int orderId,
+    int productId,
+    int allocatedQuantity
+)
+{
+    if (
+        !db_ ||
+        orderId <= 0 ||
+        productId <= 0 ||
+        allocatedQuantity < 0
+    )
+    {
+        return false;
+    }
+
+    const char* sql =
+        "UPDATE order_items "
+        "SET allocated_quantity=? "
+        "WHERE order_id=? "
+        "AND product_id=?";
+
+    sqlite3_stmt* stmt = nullptr;
+
+    if (
+        sqlite3_prepare_v2(
+            db_,
+            sql,
+            -1,
+            &stmt,
+            nullptr
+        ) != SQLITE_OK
+    )
+    {
+        return false;
+    }
+
+    sqlite3_bind_int(
+        stmt,
+        1,
+        allocatedQuantity
+    );
+
+    sqlite3_bind_int(
+        stmt,
+        2,
+        orderId
+    );
+
+    sqlite3_bind_int(
+        stmt,
+        3,
+        productId
+    );
+
+    const bool ok =
+        sqlite3_step(stmt) ==
+            SQLITE_DONE &&
+        sqlite3_changes(db_) > 0;
+
+    sqlite3_finalize(stmt);
+
+    return ok;
+}
+
+bool Database::setOrderStatus(
+    int orderId,
+    const std::string& status
+)
+{
+    if (
+        !db_ ||
+        orderId <= 0 ||
+        status.empty()
+    )
+    {
+        return false;
+    }
+
+    const char* sql =
+        "UPDATE orders "
+        "SET status=? "
+        "WHERE id=?";
+
+    sqlite3_stmt* stmt = nullptr;
+
+    if (
+        sqlite3_prepare_v2(
+            db_,
+            sql,
+            -1,
+            &stmt,
+            nullptr
+        ) != SQLITE_OK
+    )
+    {
+        return false;
+    }
+
+    sqlite3_bind_text(
+        stmt,
+        1,
+        status.c_str(),
+        -1,
+        SQLITE_TRANSIENT
+    );
+
+    sqlite3_bind_int(
+        stmt,
+        2,
+        orderId
+    );
+
+    const bool ok =
+        sqlite3_step(stmt) ==
+            SQLITE_DONE &&
+        sqlite3_changes(db_) > 0;
+
+    sqlite3_finalize(stmt);
+
+    return ok;
+}
+

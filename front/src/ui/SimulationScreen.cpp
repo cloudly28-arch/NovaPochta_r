@@ -13,6 +13,13 @@ void SimulationScreen::update(
     refreshWarehouseData();
     refreshSupplierData();
     if (
+        selectedType_ ==
+        SelectedObjectType::Store
+    )
+    {
+        refreshSelectedStoreData();
+    }
+    if (
         simulationState_ !=
         SimulationState::Running
     )
@@ -1252,9 +1259,44 @@ void SimulationScreen::updateSupplierTruck(
 
         if (!supplierTruck_.returning)
         {
-            // Грузовик прибыл на склад.
-            supplierTruck_.returning =
-                true;
+            bool delivered = false;
+
+            if (
+                backend_ != nullptr &&
+                backend_->isReady() &&
+                activeSupplierRequestId_ > 0
+            )
+            {
+                delivered =
+                    backend_->completeSupplierRequest(
+                        activeSupplierRequestId_
+                    );
+            }
+
+            if (delivered)
+            {
+                supplierTruck_.returning =
+                    true;
+
+                refreshWarehouseData();
+                refreshSupplierData();
+            }
+            else
+            {
+                supplierTruck_.active =
+                    false;
+
+                supplierTruck_.returning =
+                    false;
+
+                supplierTruck_.position =
+                    supplierCenter_;
+
+                activeSupplierRequestId_ =
+                    -1;
+
+                return;
+            }
         }
         else
         {
@@ -1267,6 +1309,7 @@ void SimulationScreen::updateSupplierTruck(
 
             supplierTruck_.position =
                 supplierCenter_;
+            activeSupplierRequestId_ = -1;
         }
     }
 
@@ -2561,14 +2604,16 @@ void SimulationScreen::refreshSupplierData()
         !backend_->isReady()
     )
     {
-        supplierTruck_.active = false;
         return;
     }
 
     supplierRequests_ =
         backend_->getSupplierRequests();
 
-    bool hasActiveRequest = false;
+    if (supplierTruck_.active)
+    {
+        return;
+    }
 
     for (
         const SupplierRequestInfo& request :
@@ -2576,44 +2621,37 @@ void SimulationScreen::refreshSupplierData()
     )
     {
         if (
-            request.status == "Created" ||
-            request.status == "InTransit"
+            request.status != "Created" &&
+            request.status != "InTransit"
         )
         {
-            hasActiveRequest = true;
-            break;
+            continue;
         }
-    }
 
-    if (
-        hasActiveRequest &&
-        !supplierTruck_.active
-    )
-    {
-        supplierTruck_.active = true;
+        if (
+            request.deliveryDay >
+            currentDay_
+        )
+        {
+            continue;
+        }
 
-        supplierTruck_.position =
-            supplierCenter_;
+        activeSupplierRequestId_ =
+            request.id;
+
+        supplierTruck_.active =
+            true;
+
+        supplierTruck_.returning =
+            false;
 
         supplierTruck_.progress =
             0.0f;
 
-        supplierTruck_.returning =
-            false;
-    }
-
-    if (!hasActiveRequest)
-    {
-        supplierTruck_.active = false;
-
         supplierTruck_.position =
             supplierCenter_;
 
-        supplierTruck_.progress =
-            0.0f;
-
-        supplierTruck_.returning =
-            false;
+        break;
     }
 }
 void SimulationScreen::configure(
@@ -2638,6 +2676,7 @@ void SimulationScreen::configure(
 
     supplierTruck_.active =
         false;
+    activeSupplierRequestId_ = -1;
     simulationState_ =
         SimulationState::Stopped;
 }
@@ -2662,8 +2701,20 @@ void SimulationScreen::advanceDay()
         backend_ != nullptr &&
         backend_->isReady()
     )
-    {   
+    {
+        backend_->processStoreDeliveries(
+            currentDay_
+        );
+
+        backend_->simulateStoreSales(
+            currentDay_
+        );
+
         backend_->processStoreOrders(
+            currentDay_
+        );
+
+        backend_->processSupplierRequests(
             currentDay_
         );
     }

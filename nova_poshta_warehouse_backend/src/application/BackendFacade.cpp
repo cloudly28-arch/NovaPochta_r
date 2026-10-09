@@ -1,4 +1,6 @@
 #include "application/BackendFacade.h"
+#include <algorithm>
+#include <random>
 
 bool BackendFacade::initialize(
     const std::string& databasePath
@@ -297,8 +299,76 @@ bool BackendFacade::getActiveStoreOrder(
 
     return true;
 }
+void BackendFacade::simulateStoreSales(
+    int currentDay
+)
+{
+    if (
+        !ready_ ||
+        currentDay <= 0
+    )
+    {
+        return;
+    }
 
-void BackendFacade::processStoreOrders(
+    std::mt19937 generator(
+        static_cast<unsigned int>(
+            currentDay * 1009
+        )
+    );
+
+    std::uniform_int_distribution<int>
+        salesDistribution(
+            5,
+            15
+        );
+
+    const std::vector<StoreInfo> stores =
+        getStores();
+
+    for (
+        const StoreInfo& store :
+        stores
+    )
+    {
+        const std::vector<ProductStockInfo>
+            inventory =
+                getStoreInventory(
+                    store.id
+                );
+
+        for (
+            const ProductStockInfo& product :
+            inventory
+        )
+        {
+            if (
+                product.quantity <= 0
+            )
+            {
+                continue;
+            }
+
+            int sold =
+                salesDistribution(
+                    generator
+                );
+
+            sold =
+                std::min(
+                    sold,
+                    product.quantity
+                );
+
+            database_.changeStoreQuantity(
+                store.id,
+                product.productId,
+                -sold
+            );
+        }
+    }
+}
+void BackendFacade::processStoreDeliveries(
     int currentDay
 )
 {
@@ -313,6 +383,102 @@ void BackendFacade::processStoreOrders(
     const std::vector<StoreInfo> stores =
         getStores();
 
+    for (
+        const StoreInfo& store :
+        stores
+    )
+    {
+        StoreOrderRow order;
+
+        if (
+            !database_.getActiveStoreOrder(
+                store.id,
+                order
+            )
+        )
+        {
+            continue;
+        }
+
+        if (
+            order.status != "Allocated"
+        )
+        {
+            continue;
+        }
+
+        if (
+            order.deliveryDay >
+            currentDay
+        )
+        {
+            continue;
+        }
+
+        bool delivered = true;
+
+        for (
+            const OrderItemRow& item :
+            order.items
+        )
+        {
+            if (
+                item.allocatedQuantity <= 0
+            )
+            {
+                continue;
+            }
+
+            if (
+                !database_.changeStoreQuantity(
+                    store.id,
+                    item.productId,
+                    item.allocatedQuantity
+                )
+            )
+            {
+                delivered = false;
+                break;
+            }
+        }
+
+        if (delivered)
+        {
+            database_.setOrderStatus(
+                order.id,
+                "Completed"
+            );
+        }
+    }
+}
+void BackendFacade::processStoreOrders(
+    int currentDay
+)
+{
+    if (
+        !ready_ ||
+        currentDay <= 0
+    )
+    {
+        return;
+    }
+
+    std::mt19937 generator(
+        static_cast<unsigned int>(
+            currentDay * 7919
+        )
+    );
+
+    std::uniform_int_distribution<int>
+        supplierDelay(
+            1,
+            5
+        );
+
+    const std::vector<StoreInfo> stores =
+        getStores();
+
+    // Сначала магазины создают новые заказы.
     for (
         const StoreInfo& store :
         stores
@@ -365,9 +531,272 @@ void BackendFacade::processStoreOrders(
                 currentDay + 1
             );
 
-
+            // Один заказ магазина за день.
             break;
+        }
+    }
+
+    // Теперь склад обрабатывает активные заказы.
+    for (
+        const StoreInfo& store :
+        stores
+    )
+    {
+        StoreOrderRow order;
+
+        if (
+            !database_.getActiveStoreOrder(
+                store.id,
+                order
+            )
+        )
+        {
+            continue;
+        }
+
+        bool completelyAllocated = true;
+
+        for (
+            const OrderItemRow& item :
+            order.items
+        )
+        {
+            const int remaining =
+                item.requestedQuantity -
+                item.allocatedQuantity;
+
+            if (
+                remaining <= 0
+            )
+            {
+                continue;
+            }
+
+            const std::vector<WarehouseStockRow>
+                warehouseInventory =
+                    database_.getWarehouseInventory(
+                        warehouse_.getId()
+                    );
+
+            const WarehouseStockRow* warehouseProduct =
+                nullptr;
+
+            for (
+                const WarehouseStockRow& stock :
+                warehouseInventory
+            )
+            {
+                if (
+                    stock.productId ==
+                    item.productId
+                )
+                {
+                    warehouseProduct =
+                        &stock;
+
+                    break;
+                }
+            }
+
+            if (
+                warehouseProduct ==
+                nullptr
+            )
+            {
+                completelyAllocated =
+                    false;
+
+                continue;
+            }
+
+            const int available =
+                warehouseProduct->quantity;
+
+            const int allocatedNow =
+                std::min(
+                    remaining,
+                    available
+                );
+
+            if (
+                allocatedNow > 0
+            )
+            {
+                if (
+                    database_.changeWarehouseQuantity(
+                        warehouse_.getId(),
+                        item.productId,
+                        -allocatedNow
+                    )
+                )
+                {
+                    database_.setOrderItemAllocated(
+                        order.id,
+                        item.productId,
+                        item.allocatedQuantity +
+                            allocatedNow
+                    );
+                }
+            }
+
+            const int stillMissing =
+                remaining -
+                allocatedNow;
+
+            // Если склад не смог покрыть весь заказ,
+            // создаём заявку поставщику.
+            if (
+                stillMissing > 0 &&
+                !database_.hasActiveSupplierRequest(
+                    item.productId
+                )
+            )
+            {
+                database_.createSupplierRequest(
+                    item.productId,
+                    stillMissing,
+                    currentDay,
+                    currentDay +
+                        supplierDelay(
+                            generator
+                        )
+                );
+            }
+
+            // Также пополняем склад, если после выдачи
+            // остаток упал до минимального уровня.
+            const int quantityAfterAllocation =
+                available -
+                allocatedNow;
+
+            if (
+                quantityAfterAllocation <=
+                    warehouseProduct->minStock &&
+                !database_.hasActiveSupplierRequest(
+                    item.productId
+                )
+            )
+            {
+                const int replenishment =
+                    warehouseProduct->capacity -
+                    quantityAfterAllocation;
+
+                if (
+                    replenishment > 0
+                )
+                {
+                    database_.createSupplierRequest(
+                        item.productId,
+                        replenishment,
+                        currentDay,
+                        currentDay +
+                            supplierDelay(
+                                generator
+                            )
+                    );
+                }
+            }
+
+            if (
+                stillMissing > 0
+            )
+            {
+                completelyAllocated =
+                    false;
+            }
+        }
+
+        if (completelyAllocated)
+        {
+            database_.setOrderStatus(
+                order.id,
+                "Allocated"
+            );
+        }
+        else
+        {
+            database_.setOrderStatus(
+                order.id,
+                "WaitingSupply"
+            );
         }
     }
 }
 
+void BackendFacade::processSupplierRequests(
+    int currentDay
+)
+{
+    if (
+        !ready_ ||
+        currentDay <= 0
+    )
+    {
+        return;
+    }
+
+    std::mt19937 generator(
+        static_cast<unsigned int>(
+            currentDay * 7919
+        )
+    );
+
+    std::uniform_int_distribution<int>
+        delayDistribution(
+            1,
+            5
+        );
+
+    const std::vector<WarehouseStockRow>
+        inventory =
+            database_.getWarehouseInventory(
+                warehouse_.getId()
+            );
+
+    for (
+        const WarehouseStockRow& product :
+        inventory
+    )
+    {
+        if (
+            product.quantity >
+            product.minStock
+        )
+        {
+            continue;
+        }
+
+        if (
+            database_.hasActiveSupplierRequest(
+                product.productId
+            )
+        )
+        {
+            continue;
+        }
+
+        const int quantity =
+            product.capacity -
+            product.quantity;
+
+        if (
+            quantity <= 0
+        )
+        {
+            continue;
+        }
+
+        const int deliveryDay =
+            currentDay +
+            delayDistribution(
+                generator
+            );
+
+        database_.createSupplierRequest(
+            product.productId,
+            quantity,
+            currentDay,
+            deliveryDay
+        );
+    }
+}

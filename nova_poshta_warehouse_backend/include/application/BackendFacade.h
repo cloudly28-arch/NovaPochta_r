@@ -93,7 +93,16 @@ public:
     int storeId,
         StoreOrderInfo& order
     ) const;
+    void simulateStoreSales(
+        int currentDay
+    );
+    void processStoreDeliveries(
+        int currentDay
+    );
     void processStoreOrders(
+        int currentDay
+    );
+    void processSupplierRequests(
         int currentDay
     );
 
