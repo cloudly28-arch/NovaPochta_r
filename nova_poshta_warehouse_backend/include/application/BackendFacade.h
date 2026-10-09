@@ -91,8 +91,11 @@ public:
 
     bool getActiveStoreOrder(
     int storeId,
-    StoreOrderInfo& order
-) const;
+        StoreOrderInfo& order
+    ) const;
+    void processStoreOrders(
+        int currentDay
+    );
 
 private:
     Database database_;

@@ -298,3 +298,76 @@ bool BackendFacade::getActiveStoreOrder(
     return true;
 }
 
+void BackendFacade::processStoreOrders(
+    int currentDay
+)
+{
+    if (
+        !ready_ ||
+        currentDay <= 0
+    )
+    {
+        return;
+    }
+
+    const std::vector<StoreInfo> stores =
+        getStores();
+
+    for (
+        const StoreInfo& store :
+        stores
+    )
+    {
+        if (
+            database_.hasActiveStoreOrder(
+                store.id
+            )
+        )
+        {
+            continue;
+        }
+
+        const std::vector<ProductStockInfo>
+            inventory =
+                getStoreInventory(
+                    store.id
+                );
+
+        for (
+            const ProductStockInfo& product :
+            inventory
+        )
+        {
+            if (
+                product.quantity >
+                product.minStock
+            )
+            {
+                continue;
+            }
+
+            const int requestedQuantity =
+                product.capacity -
+                product.quantity;
+
+            if (
+                requestedQuantity <= 0
+            )
+            {
+                continue;
+            }
+
+            database_.createStoreOrder(
+                store.id,
+                product.productId,
+                requestedQuantity,
+                currentDay,
+                currentDay + 1
+            );
+
+
+            break;
+        }
+    }
+}
+

@@ -2658,4 +2658,13 @@ void SimulationScreen::advanceDay()
     }
 
     currentDay_++;
+    if (
+        backend_ != nullptr &&
+        backend_->isReady()
+    )
+    {   
+        backend_->processStoreOrders(
+            currentDay_
+        );
+    }
 }

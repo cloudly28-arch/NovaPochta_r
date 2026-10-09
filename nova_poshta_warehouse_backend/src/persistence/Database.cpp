@@ -657,3 +657,251 @@ bool Database::changeStoreQuantity(int storeId, int productId, int delta) {
 bool Database::beginTransaction() { return db_ && exec(db_, "BEGIN TRANSACTION;"); }
 bool Database::commit() { return db_ && exec(db_, "COMMIT;"); }
 bool Database::rollback() { return db_ && exec(db_, "ROLLBACK;"); }
+
+bool Database::hasActiveStoreOrder(
+    int storeId
+) const
+{
+    if (
+        !db_ ||
+        storeId <= 0
+    )
+    {
+        return false;
+    }
+
+    const char* sql =
+        "SELECT 1 "
+        "FROM orders "
+        "WHERE store_id = ? "
+        "AND status NOT IN ('Completed', 'Cancelled') "
+        "LIMIT 1";
+
+    sqlite3_stmt* stmt = nullptr;
+
+    if (
+        sqlite3_prepare_v2(
+            db_,
+            sql,
+            -1,
+            &stmt,
+            nullptr
+        ) != SQLITE_OK
+    )
+    {
+        return false;
+    }
+
+    sqlite3_bind_int(
+        stmt,
+        1,
+        storeId
+    );
+
+    const bool exists =
+        sqlite3_step(stmt) ==
+        SQLITE_ROW;
+
+    sqlite3_finalize(stmt);
+
+    return exists;
+}
+
+bool Database::createStoreOrder(
+    int storeId,
+    int productId,
+    int requestedQuantity,
+    int createdDay,
+    int deliveryDay
+)
+{
+    if (
+        !db_ ||
+        storeId <= 0 ||
+        productId <= 0 ||
+        requestedQuantity <= 0 ||
+        createdDay <= 0 ||
+        deliveryDay <= createdDay
+    )
+    {
+        return false;
+    }
+
+    if (
+        sqlite3_exec(
+            db_,
+            "BEGIN TRANSACTION;",
+            nullptr,
+            nullptr,
+            nullptr
+        ) != SQLITE_OK
+    )
+    {
+        return false;
+    }
+
+    const char* orderSql =
+        "INSERT INTO orders "
+        "(store_id, created_day, delivery_day, status) "
+        "VALUES (?, ?, ?, 'Created')";
+
+    sqlite3_stmt* stmt = nullptr;
+
+    if (
+        sqlite3_prepare_v2(
+            db_,
+            orderSql,
+            -1,
+            &stmt,
+            nullptr
+        ) != SQLITE_OK
+    )
+    {
+        sqlite3_exec(
+            db_,
+            "ROLLBACK;",
+            nullptr,
+            nullptr,
+            nullptr
+        );
+
+        return false;
+    }
+
+    sqlite3_bind_int(
+        stmt,
+        1,
+        storeId
+    );
+
+    sqlite3_bind_int(
+        stmt,
+        2,
+        createdDay
+    );
+
+    sqlite3_bind_int(
+        stmt,
+        3,
+        deliveryDay
+    );
+
+    if (
+        sqlite3_step(stmt) !=
+        SQLITE_DONE
+    )
+    {
+        sqlite3_finalize(stmt);
+
+        sqlite3_exec(
+            db_,
+            "ROLLBACK;",
+            nullptr,
+            nullptr,
+            nullptr
+        );
+
+        return false;
+    }
+
+    sqlite3_finalize(stmt);
+
+    const int orderId =
+        static_cast<int>(
+            sqlite3_last_insert_rowid(
+                db_
+            )
+        );
+
+    const char* itemSql =
+        "INSERT INTO order_items "
+        "("
+        "order_id, "
+        "product_id, "
+        "requested_quantity, "
+        "allocated_quantity"
+        ") "
+        "VALUES (?, ?, ?, 0)";
+
+    if (
+        sqlite3_prepare_v2(
+            db_,
+            itemSql,
+            -1,
+            &stmt,
+            nullptr
+        ) != SQLITE_OK
+    )
+    {
+        sqlite3_exec(
+            db_,
+            "ROLLBACK;",
+            nullptr,
+            nullptr,
+            nullptr
+        );
+
+        return false;
+    }
+
+    sqlite3_bind_int(
+        stmt,
+        1,
+        orderId
+    );
+
+    sqlite3_bind_int(
+        stmt,
+        2,
+        productId
+    );
+
+    sqlite3_bind_int(
+        stmt,
+        3,
+        requestedQuantity
+    );
+
+    if (
+        sqlite3_step(stmt) !=
+        SQLITE_DONE
+    )
+    {
+        sqlite3_finalize(stmt);
+
+        sqlite3_exec(
+            db_,
+            "ROLLBACK;",
+            nullptr,
+            nullptr,
+            nullptr
+        );
+
+        return false;
+    }
+
+    sqlite3_finalize(stmt);
+
+    if (
+        sqlite3_exec(
+            db_,
+            "COMMIT;",
+            nullptr,
+            nullptr,
+            nullptr
+        ) != SQLITE_OK
+    )
+    {
+        sqlite3_exec(
+            db_,
+            "ROLLBACK;",
+            nullptr,
+            nullptr,
+            nullptr
+        );
+
+        return false;
+    }
+
+    return true;
+}

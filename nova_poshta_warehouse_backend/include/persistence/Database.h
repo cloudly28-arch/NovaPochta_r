@@ -104,4 +104,15 @@ public:
         int storeId,
         StoreOrderRow& order
     ) const;
+    bool hasActiveStoreOrder(
+        int storeId
+    ) const;
+
+    bool createStoreOrder(
+        int storeId,
+        int productId,
+        int requestedQuantity,
+        int createdDay,
+        int deliveryDay
+    );
 };
