@@ -245,4 +245,16 @@ private:
     bool warehouseBatchesLoaded_ = false;
 
     void drawWarehouseBatches();
+
+    std::vector<WarehouseWriteoffRow> warehouseWriteoffs_;
+    bool warehouseWriteoffsLoaded_ = false;
+
+    void drawWarehouseWriteoffs();
+    int batchDiscountPercent_ = 20;
+    bool batchDiscountFailed_ = false;
+
+    WarehouseAllocationStats warehouseAllocationStats_;
+    bool warehouseAllocationStatsLoaded_ = false;
+
+    void drawWarehouseAllocationStats();
 };

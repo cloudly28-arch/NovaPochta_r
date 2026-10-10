@@ -124,6 +124,17 @@ public:
         std::vector<WarehouseBatchRow>& batches
     ) const;
     bool writeOffExpiredBatches(int currentDay);
+    bool getWarehouseWriteoffs(
+        std::vector<WarehouseWriteoffRow>& writeoffs
+    ) const;
+    bool setBatchDiscount(
+        int batchId,
+        int percent,
+        int currentDay
+    );
+    bool getWarehouseAllocationStats(
+        WarehouseAllocationStats& stats
+    ) const;
 private:
     Database database_;
     Warehouse warehouse_;

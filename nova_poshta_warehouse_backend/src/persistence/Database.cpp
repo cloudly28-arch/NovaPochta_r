@@ -1236,7 +1236,7 @@ bool Database::getWarehouseBatches(
     const char* sql =
         "SELECT b.id, b.warehouse_id, b.product_id, p.name, "
         "b.quantity, b.received_day, b.expires_day, "
-        "b.unit_price_cents "
+        "b.unit_price_cents, b.discount_percent "
         "FROM warehouse_batches AS b "
         "JOIN products AS p ON p.id = b.product_id "
         "WHERE b.warehouse_id = ? AND b.quantity > 0 "
@@ -1282,6 +1282,7 @@ bool Database::getWarehouseBatches(
         batch.unitPriceCents =
             sqlite3_column_int(statement, 7);
 
+        batch.discountPercent = sqlite3_column_int(statement, 8);
         result.push_back(batch);
     }
 
@@ -1350,8 +1351,6 @@ bool Database::changeWarehouseQuantity(
         return false;
     }
 
-    // Поступление: создание партии выполняется отдельно
-    // в транзакции completeSupplierRequest().
     if (delta >= 0) {
         return changeWarehouseQuantityRaw(
             warehouseId, productId, delta
@@ -1389,8 +1388,6 @@ bool Database::changeWarehouseQuantity(
         return cancel();
     }
 
-    // getWarehouseBatches() уже сортирует партии
-    // по ближайшему сроку годности.
     for (const WarehouseBatchRow& batch : batches) {
         if (remaining == 0) {
             break;
@@ -1416,7 +1413,26 @@ bool Database::changeWarehouseQuantity(
         if (!executeSql(sql) || sqlite3_changes(db_) != 1) {
             return cancel();
         }
+        const long long actualUnitPriceCents =
+            (static_cast<long long>(batch.unitPriceCents) *
+            (100 - batch.discountPercent) + 50) / 100;
 
+        const std::string allocationSql =
+            "INSERT INTO warehouse_allocations ("
+            "batch_id, allocation_day, quantity, "
+            "base_unit_price_cents, actual_unit_price_cents, "
+            "discount_percent"
+            ") VALUES (" +
+            std::to_string(batch.id) + "," +
+            std::to_string(currentDay) + "," +
+            std::to_string(taken) + "," +
+            std::to_string(batch.unitPriceCents) + "," +
+            std::to_string(actualUnitPriceCents) + "," +
+            std::to_string(batch.discountPercent) + ");";
+
+        if (!executeSql(allocationSql)) {
+            return cancel();
+        }
         remaining -= taken;
     }
 
@@ -1503,5 +1519,185 @@ bool Database::writeOffExpiredBatches(
         return cancel();
     }
 
+    return true;
+}
+
+bool Database::getWarehouseWriteoffs(
+    int warehouseId,
+    std::vector<WarehouseWriteoffRow>& writeoffs
+) const {
+    writeoffs.clear();
+
+    if (db_ == nullptr) {
+        return false;
+    }
+
+    const char* sql =
+        "SELECT w.id, w.batch_id, w.product_id, p.name, "
+        "w.writeoff_day, w.quantity, w.loss_cents "
+        "FROM warehouse_writeoffs AS w "
+        "JOIN products AS p ON p.id = w.product_id "
+        "WHERE w.warehouse_id = ? "
+        "ORDER BY w.writeoff_day DESC, w.id DESC;";
+
+    sqlite3_stmt* statement = nullptr;
+
+    if (sqlite3_prepare_v2(
+            db_, sql, -1, &statement, nullptr
+        ) != SQLITE_OK) {
+        sqlite3_finalize(statement);
+        return false;
+    }
+
+    if (sqlite3_bind_int(
+            statement, 1, warehouseId
+        ) != SQLITE_OK) {
+        sqlite3_finalize(statement);
+        return false;
+    }
+
+    std::vector<WarehouseWriteoffRow> result;
+    int status = SQLITE_OK;
+
+    while ((status = sqlite3_step(statement)) == SQLITE_ROW) {
+        WarehouseWriteoffRow row;
+
+        row.id = sqlite3_column_int(statement, 0);
+        row.batchId = sqlite3_column_int(statement, 1);
+        row.productId = sqlite3_column_int(statement, 2);
+
+        const unsigned char* name =
+            sqlite3_column_text(statement, 3);
+
+        if (name != nullptr) {
+            row.productName =
+                reinterpret_cast<const char*>(name);
+        }
+
+        row.writeoffDay = sqlite3_column_int(statement, 4);
+        row.quantity = sqlite3_column_int(statement, 5);
+        row.lossCents = sqlite3_column_int64(statement, 6);
+
+        result.push_back(row);
+    }
+
+    const int finalizeStatus = sqlite3_finalize(statement);
+
+    if (status != SQLITE_DONE || finalizeStatus != SQLITE_OK) {
+        return false;
+    }
+
+    writeoffs.swap(result);
+    return true;
+}
+
+bool Database::setBatchDiscount(
+    int warehouseId,
+    int batchId,
+    int percent,
+    int currentDay
+) {
+    if (db_ == nullptr ||
+        currentDay < 1 ||
+        percent < 0 ||
+        percent > 90) {
+        return false;
+    }
+
+    const char* sql =
+        "UPDATE warehouse_batches "
+        "SET discount_percent = ? "
+        "WHERE warehouse_id = ? AND id = ? "
+        "AND quantity > 0 "
+        "AND expires_day > ? "
+        "AND expires_day - ? <= 3;";
+
+    sqlite3_stmt* statement = nullptr;
+
+    if (sqlite3_prepare_v2(
+            db_, sql, -1, &statement, nullptr
+        ) != SQLITE_OK) {
+        sqlite3_finalize(statement);
+        return false;
+    }
+
+    const bool bound =
+        sqlite3_bind_int(statement, 1, percent) == SQLITE_OK &&
+        sqlite3_bind_int(statement, 2, warehouseId) == SQLITE_OK &&
+        sqlite3_bind_int(statement, 3, batchId) == SQLITE_OK &&
+        sqlite3_bind_int(statement, 4, currentDay) == SQLITE_OK &&
+        sqlite3_bind_int(statement, 5, currentDay) == SQLITE_OK;
+
+    const bool updated =
+        bound &&
+        sqlite3_step(statement) == SQLITE_DONE &&
+        sqlite3_changes(db_) == 1;
+
+    const int finalizeStatus = sqlite3_finalize(statement);
+
+    return updated && finalizeStatus == SQLITE_OK;
+}
+
+bool Database::getWarehouseAllocationStats(
+    int warehouseId,
+    WarehouseAllocationStats& stats
+) const {
+    stats = WarehouseAllocationStats{};
+
+    if (db_ == nullptr) {
+        return false;
+    }
+
+    const char* sql =
+        "SELECT "
+        "COALESCE(SUM(a.quantity), 0), "
+        "COALESCE(SUM(a.quantity * a.actual_unit_price_cents), 0), "
+        "COALESCE(SUM(a.quantity * "
+        "(a.base_unit_price_cents - a.actual_unit_price_cents)), 0) "
+        "FROM warehouse_allocations AS a "
+        "JOIN warehouse_batches AS b ON b.id = a.batch_id "
+        "WHERE b.warehouse_id = ?;";
+
+    sqlite3_stmt* statement = nullptr;
+
+    if (sqlite3_prepare_v2(
+            db_, sql, -1, &statement, nullptr
+        ) != SQLITE_OK) {
+        sqlite3_finalize(statement);
+        return false;
+    }
+
+    if (sqlite3_bind_int(
+            statement, 1, warehouseId
+        ) != SQLITE_OK) {
+        sqlite3_finalize(statement);
+        return false;
+    }
+
+    if (sqlite3_step(statement) != SQLITE_ROW) {
+        sqlite3_finalize(statement);
+        return false;
+    }
+
+    WarehouseAllocationStats result;
+
+    result.allocatedUnits =
+        sqlite3_column_int64(statement, 0);
+
+    result.allocatedValueCents =
+        sqlite3_column_int64(statement, 1);
+
+    result.discountLossCents =
+        sqlite3_column_int64(statement, 2);
+
+    const int nextStatus = sqlite3_step(statement);
+    const int finalizeStatus = sqlite3_finalize(statement);
+
+    if (nextStatus != SQLITE_DONE ||
+        finalizeStatus != SQLITE_OK) {
+        return false;
+    }
+
+    stats = result;
     return true;
 }

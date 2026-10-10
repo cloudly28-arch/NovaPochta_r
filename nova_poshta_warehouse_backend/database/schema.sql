@@ -284,7 +284,8 @@ CREATE TABLE warehouse_batches (
     received_day INTEGER NOT NULL CHECK (received_day >= 1),
     expires_day INTEGER NOT NULL,
     unit_price_cents INTEGER NOT NULL CHECK (unit_price_cents > 0),
-
+    discount_percent INTEGER NOT NULL DEFAULT 0
+        CHECK (discount_percent BETWEEN 0 AND 90),
     FOREIGN KEY (warehouse_id)
         REFERENCES warehouses(id) ON DELETE CASCADE,
     FOREIGN KEY (product_id)
@@ -333,5 +334,20 @@ CREATE TABLE warehouse_writeoffs (
         REFERENCES warehouses(id) ON DELETE CASCADE,
     FOREIGN KEY (product_id)
         REFERENCES products(id) ON DELETE CASCADE
+);
+CREATE TABLE warehouse_allocations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    batch_id INTEGER NOT NULL,
+    allocation_day INTEGER NOT NULL CHECK (allocation_day >= 1),
+    quantity INTEGER NOT NULL CHECK (quantity > 0),
+    base_unit_price_cents INTEGER NOT NULL
+        CHECK (base_unit_price_cents > 0),
+    actual_unit_price_cents INTEGER NOT NULL
+        CHECK (actual_unit_price_cents > 0),
+    discount_percent INTEGER NOT NULL
+        CHECK (discount_percent BETWEEN 0 AND 90),
+
+    FOREIGN KEY (batch_id)
+        REFERENCES warehouse_batches(id) ON DELETE CASCADE
 );
 COMMIT;

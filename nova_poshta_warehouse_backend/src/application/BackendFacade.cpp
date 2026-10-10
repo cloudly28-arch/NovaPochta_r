@@ -1007,3 +1007,58 @@ bool BackendFacade::writeOffExpiredBatches(int currentDay) {
     lastError_.clear();
     return true;
 }
+
+bool BackendFacade::getWarehouseWriteoffs(
+    std::vector<WarehouseWriteoffRow>& writeoffs
+) const {
+    writeoffs.clear();
+
+    if (!ready_) {
+        return false;
+    }
+
+    return database_.getWarehouseWriteoffs(
+        warehouse_.getId(),
+        writeoffs
+    );
+}
+
+bool BackendFacade::setBatchDiscount(
+    int batchId,
+    int percent,
+    int currentDay
+) {
+    if (!ready_) {
+        lastError_ = "Database is not ready";
+        return false;
+    }
+
+    if (!database_.setBatchDiscount(
+            warehouse_.getId(),
+            batchId,
+            percent,
+            currentDay
+        )) {
+        lastError_ =
+            "Cannot discount batch: check quantity and expiry";
+        return false;
+    }
+
+    lastError_.clear();
+    return true;
+}
+
+bool BackendFacade::getWarehouseAllocationStats(
+    WarehouseAllocationStats& stats
+) const {
+    stats = WarehouseAllocationStats{};
+
+    if (!ready_) {
+        return false;
+    }
+
+    return database_.getWarehouseAllocationStats(
+        warehouse_.getId(),
+        stats
+    );
+}

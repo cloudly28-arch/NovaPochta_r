@@ -68,6 +68,21 @@ struct WarehouseBatchRow {
     int receivedDay{};
     int expiresDay{};
     int unitPriceCents{};
+    int discountPercent{};
+};
+struct WarehouseWriteoffRow {
+    int id{};
+    int batchId{};
+    int productId{};
+    std::string productName;
+    int writeoffDay{};
+    int quantity{};
+    long long lossCents{};
+};
+struct WarehouseAllocationStats {
+    long long allocatedUnits{};
+    long long allocatedValueCents{};
+    long long discountLossCents{};
 };
 class Database {
 private:
@@ -171,4 +186,19 @@ public:
         int warehouseId,
         int currentDay
     );
+
+    bool getWarehouseWriteoffs(
+        int warehouseId,
+        std::vector<WarehouseWriteoffRow>& writeoffs
+    ) const;
+    bool setBatchDiscount(
+        int warehouseId,
+        int batchId,
+        int percent,
+        int currentDay
+    );
+    bool getWarehouseAllocationStats(
+        int warehouseId,
+        WarehouseAllocationStats& stats
+    ) const;
 };
