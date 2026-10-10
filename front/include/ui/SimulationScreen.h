@@ -31,6 +31,10 @@ public:
         const SimulationSettings& settings
     );
 
+    void setDatabasePaths(
+        const std::filesystem::path& databasePath,
+        const std::filesystem::path& schemaPath
+    );
 private:
     enum class SelectedObjectType
     {
@@ -221,4 +225,10 @@ private:
 
     bool selectedStoreHasOrder_ =
         false;
-};
+
+    std::filesystem::path
+        databasePath_;
+
+    std::filesystem::path
+        schemaPath_;
+    };

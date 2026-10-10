@@ -5,6 +5,7 @@
 #include "application/BackendFacade.h"
 #include "ui/SimulationScreen.h"
 #include "ui/StartScreen.h"
+#include <filesystem>
 
 class Application
 {
@@ -38,4 +39,10 @@ private:
 
     BackendFacade backend_;
     SimulationScreen simulationScreen_;
+
+    std::filesystem::path
+        databasePath_;
+
+    std::filesystem::path
+        schemaPath_;
 };

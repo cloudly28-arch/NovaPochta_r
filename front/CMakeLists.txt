@@ -67,9 +67,11 @@ add_custom_command(
         $<TARGET_FILE_DIR:NovaPoshtaWarehouseFrontend>/assets
 
     COMMAND ${CMAKE_COMMAND} -E make_directory
-        $<TARGET_FILE_DIR:NovaPoshtaWarehouseFrontend>/database
+    	$<TARGET_FILE_DIR:NovaPoshtaWarehouseFrontend>/database
 
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        ${CMAKE_CURRENT_SOURCE_DIR}/../nova_poshta_warehouse_backend/nova_poshta_warehouse.db
-        $<TARGET_FILE_DIR:NovaPoshtaWarehouseFrontend>/database/nova_poshta_warehouse.db
+    	${CMAKE_CURRENT_SOURCE_DIR}/../nova_poshta_warehouse_backend/database/schema.sql
+    	$<TARGET_FILE_DIR:NovaPoshtaWarehouseFrontend>/database/schema.sql
 )
+
+

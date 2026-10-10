@@ -1,6 +1,9 @@
 #include "application/BackendFacade.h"
 #include <algorithm>
 #include <random>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
 
 bool BackendFacade::initialize(
     const std::string& databasePath
@@ -25,7 +28,60 @@ bool BackendFacade::initialize(
     ready_ = true;
     return true;
 }
+bool BackendFacade::resetDatabase(
+    const std::string& databasePath,
+    const std::string& schemaPath
+)
+{
+    ready_ = false;
 
+    database_.close();
+    warehouse_ = Warehouse{};
+
+    std::ifstream schemaFile(
+        schemaPath,
+        std::ios::binary
+    );
+
+    if (!schemaFile)
+    {
+        return false;
+    }
+
+    std::ostringstream buffer;
+    buffer << schemaFile.rdbuf();
+
+    const std::string schema =
+        buffer.str();
+
+    if (schema.empty())
+    {
+        return false;
+    }
+
+    std::error_code error;
+
+    std::filesystem::remove(
+        databasePath,
+        error
+    );
+
+    Database newDatabase;
+
+    if (!newDatabase.open(databasePath))
+    {
+        return false;
+    }
+
+    if (!newDatabase.executeSql(schema))
+    {
+        return false;
+    }
+
+    newDatabase.close();
+
+    return initialize(databasePath);
+}
 bool BackendFacade::isReady() const
 {
     return ready_;

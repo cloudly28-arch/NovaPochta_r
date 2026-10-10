@@ -71,6 +71,9 @@ public:
     bool open(const std::string& path);
     void close();
     bool isOpen() const;
+    bool executeSql(
+            const std::string& sql
+        );
 
     bool loadWarehouse(Warehouse& warehouse) const;
     std::vector<StoreStockRow> getStoreInventory(int storeId) const;

@@ -379,18 +379,57 @@ void SimulationScreen::drawBottomBar()
         )
     )
     {
+        if (
+            backend_ != nullptr &&
+            !databasePath_.empty() &&
+            !schemaPath_.empty()
+        )
+        {
+            backend_->resetDatabase(
+                databasePath_.string(),
+                schemaPath_.string()
+            );
+
+            refreshWarehouseData();
+            refreshSupplierData();
+
+            if (
+                selectedType_ ==
+                SelectedObjectType::Store
+            )
+            {
+                refreshSelectedStoreData();
+            }
+        }
+
         simulationState_ =
             SimulationState::Stopped;
 
         currentDay_ = 1;
         dayTimer_ = 0.0f;
 
+        supplierTruck_.active =
+            false;
+
+        supplierTruck_.returning =
+            false;
+
+        supplierTruck_.progress =
+            0.0f;
+
+        supplierTruck_.position =
+            supplierCenter_;
+
+        activeSupplierRequestId_ =
+            -1;
+
         for (
             VehicleView& vehicle :
             vehicles_
         )
         {
-            vehicle.progress = 0.0f;
+            vehicle.progress =
+                0.0f;
 
             vehicle.direction =
                 VehicleDirection::ToStore;
@@ -2543,7 +2582,17 @@ void SimulationScreen::setAssetsPath(
 {
     assetsPath_ = path;
 }
+void SimulationScreen::setDatabasePaths(
+    const std::filesystem::path& databasePath,
+    const std::filesystem::path& schemaPath
+)
+{
+    databasePath_ =
+        databasePath;
 
+    schemaPath_ =
+        schemaPath;
+}
 void SimulationScreen::
 refreshSelectedStoreData()
 {

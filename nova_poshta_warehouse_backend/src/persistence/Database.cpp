@@ -28,6 +28,50 @@ bool Database::open(const std::string& path) {
 }
 void Database::close() { if (db_) { sqlite3_close(db_); db_ = nullptr; } }
 bool Database::isOpen() const { return db_ != nullptr; }
+bool Database::executeSql(
+    const std::string& sql
+)
+{
+    if (
+        !db_ ||
+        sql.empty()
+    )
+    {
+        return false;
+    }
+
+    char* errorMessage = nullptr;
+
+    const int result =
+        sqlite3_exec(
+            db_,
+            sql.c_str(),
+            nullptr,
+            nullptr,
+            &errorMessage
+        );
+
+    if (
+        result != SQLITE_OK
+    )
+    {
+        if (errorMessage != nullptr)
+        {
+            std::cerr
+                << "SQLite error: "
+                << errorMessage
+                << '\n';
+
+            sqlite3_free(
+                errorMessage
+            );
+        }
+
+        return false;
+    }
+
+    return true;
+}
 
 bool Database::loadWarehouse(Warehouse& warehouse) const {
     if (!db_) return false;

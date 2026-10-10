@@ -66,6 +66,10 @@ class BackendFacade
 {
 public:
     bool initialize(const std::string& databasePath);
+    bool resetDatabase(
+        const std::string& databasePath,
+        const std::string& schemaPath
+    );
     bool isReady() const;
 
     std::vector<StoreInfo> getStores() const;

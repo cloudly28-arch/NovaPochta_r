@@ -71,23 +71,52 @@ Application::Application()
             << "Failed to load Cyrillic font\n";
     }
 
-    const auto databasePath =
+    databasePath_ =
         exeDirectory /
         "database" /
         "nova_poshta_warehouse.db";
 
-    if (!backend_.initialize(
-            databasePath.string()
-        ))
+    schemaPath_ =
+        exeDirectory /
+        "database" /
+        "schema.sql";
+
+    if (
+        !std::filesystem::exists(
+            databasePath_
+        )
+    )
+    {
+        if (
+            !backend_.resetDatabase(
+                databasePath_.string(),
+                schemaPath_.string()
+            )
+        )
+        {
+            std::cerr
+                << "Failed to create database\n";
+        }
+    }
+    else if (
+        !backend_.initialize(
+            databasePath_.string()
+        )
+    )
     {
         std::cerr
             << "Failed to open database: "
-            << databasePath
+            << databasePath_
             << '\n';
     }
 
     simulationScreen_.setBackend(
         &backend_
+    );
+
+    simulationScreen_.setDatabasePaths(
+        databasePath_,
+        schemaPath_
     );
 
     ImGui::StyleColorsDark();

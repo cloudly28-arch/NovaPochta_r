@@ -17,3 +17,10 @@ build.ninja
 .ninja_deps
 .ninja_log
 imgui.ini
+
+# Runtime database
+*.db
+
+# Backend runtime artifacts
+output.txt
+warehouse_backend
