@@ -45,7 +45,6 @@ Application::Application()
     }
     ImGuiIO& io = ImGui::GetIO();
 
-    // Кириллица для названий товаров из SQLite.
     ImFont* cyrillicFont =
     io.Fonts->AddFontFromFileTTF(
         "C:/Windows/Fonts/arial.ttf",
@@ -56,11 +55,11 @@ Application::Application()
 
     if (cyrillicFont != nullptr)
     {
-        // Делаем кириллический шрифт основным для всего ImGui.
         io.FontDefault = cyrillicFont;
 
-        // Пересоздаём текстуру шрифтов после добавления Arial.
-        ImGui::SFML::UpdateFontTexture();
+        if (!ImGui::SFML::UpdateFontTexture()) {
+            std::cerr << "Failed to update font texture\n";
+        }
 
         std::cout
             << "Cyrillic font loaded successfully\n";
@@ -81,35 +80,40 @@ Application::Application()
         "database" /
         "schema.sql";
 
-    if (
-        !std::filesystem::exists(
-            databasePath_
-        )
-    )
-    {
-        if (
-            !backend_.resetDatabase(
-                databasePath_.string(),
-                schemaPath_.string()
-            )
-        )
-        {
+    std::cout << "Database path: " << databasePath_ << '\n';
+    std::cout << "Schema path: " << schemaPath_ << '\n';
+
+    bool databaseReady = false;
+
+    if (std::filesystem::exists(databasePath_)) {
+        databaseReady = backend_.initialize(databasePath_.string());
+
+        if (!databaseReady) {
             std::cerr
-                << "Failed to create database\n";
+                << "Existing database could not be loaded:\n"
+                << backend_.getLastError()
+                << '\n';
         }
     }
-    else if (
-        !backend_.initialize(
-            databasePath_.string()
-        )
-    )
-    {
-        std::cerr
-            << "Failed to open database: "
-            << databasePath_
-            << '\n';
+
+    if (!databaseReady) {
+        databaseReady = backend_.resetDatabase(
+            databasePath_.string(),
+            schemaPath_.string()
+        );
     }
 
+    if (!databaseReady) {
+        std::cerr
+            << "Database initialization failed:\n"
+            << backend_.getLastError()
+            << '\n';
+
+        window_.close();
+        return;
+    }
+
+    std::cout << "Database loaded successfully\n";
     simulationScreen_.setBackend(
         &backend_
     );
@@ -217,38 +221,44 @@ void Application::processEvents()
 
 void Application::update()
 {
-    const sf::Time deltaTime =
-        deltaClock_.restart();
+    const sf::Time deltaTime = deltaClock_.restart();
 
-    ImGui::SFML::Update(
-        window_,
-        deltaTime
-    );
+    ImGui::SFML::Update(window_, deltaTime);
 
-    if (
-        currentScreen_ ==
-        Screen::Start
-    )
-    {
-        if (
-            startScreen_.draw(
-                settings_
-            )
-        )
-        {
-            simulationScreen_.configure(
-                settings_
+    if (currentScreen_ == Screen::Start) {
+        if (startScreen_.draw(settings_)) {
+            const bool started = backend_.startExperiment(
+                databasePath_.string(),
+                schemaPath_.string(),
+                settings_.stores,
+                settings_.products
             );
 
-            currentScreen_ =
-                Screen::Simulation;
+            if (started) {
+                simulationScreen_.configure(settings_);
+                currentScreen_ = Screen::Simulation;
+            } else {
+                ImGui::OpenPopup("Experiment initialization error");
+            }
         }
+    } else {
+        simulationScreen_.update(deltaTime.asSeconds());
     }
-    else
-    {
-        simulationScreen_.update(
-            deltaTime.asSeconds()
+
+    if (ImGui::BeginPopupModal(
+            "Experiment initialization error",
+            nullptr,
+            ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::TextWrapped(
+            "%s",
+            backend_.getLastError().c_str()
         );
+
+        if (ImGui::Button("OK")) {
+            ImGui::CloseCurrentPopup();
+        }
+
+        ImGui::EndPopup();
     }
 }
 

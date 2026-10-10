@@ -10,14 +10,17 @@ void SimulationScreen::update(
     float deltaTime
 )
 {
-    refreshWarehouseData();
-    refreshSupplierData();
-    if (
-        selectedType_ ==
-        SelectedObjectType::Store
-    )
-    {
-        refreshSelectedStoreData();
+    dataRefreshTimer_ += deltaTime;
+
+    if (dataRefreshTimer_ >= 0.25f) {
+        dataRefreshTimer_ = 0.0f;
+
+        refreshWarehouseData();
+        refreshSupplierData();
+
+        if (selectedType_ == SelectedObjectType::Store) {
+            refreshSelectedStoreData();
+        }
     }
     if (
         simulationState_ !=
@@ -78,6 +81,14 @@ void SimulationScreen::ensureStoresCreated(
     int storeCount
 )
 {
+    if (backend_ == nullptr || !backend_->isReady()) {
+        return;
+    }
+
+    const std::vector<StoreInfo> actualStores =
+        backend_->getStores();
+
+    storeCount = static_cast<int>(actualStores.size());
     if (
         static_cast<int>(
             stores_.size()
@@ -108,7 +119,7 @@ void SimulationScreen::ensureStoresCreated(
 
         StoreView store;
 
-        store.id = i + 1;
+        store.id = actualStores[i].id;
 
         store.position =
             sf::Vector2f(
@@ -369,82 +380,72 @@ void SimulationScreen::drawBottomBar()
 
     ImGui::SameLine();
 
-    if (
-        ImGui::Button(
-            "STOP",
-            ImVec2(
-                100.0f,
-                40.0f
-            )
-        )
-    )
-    {
-        if (
-            backend_ != nullptr &&
+    if (ImGui::Button("STOP", ImVec2(100.0f, 40.0f))) {
+        bool resetOk = false;
+
+        if (backend_ != nullptr &&
             !databasePath_.empty() &&
-            !schemaPath_.empty()
-        )
-        {
-            backend_->resetDatabase(
+            !schemaPath_.empty()) {
+            resetOk = backend_->resetDatabase(
                 databasePath_.string(),
                 schemaPath_.string()
             );
+        }
+
+        if (!resetOk) {
+            simulationState_ = SimulationState::Paused;
+            ImGui::OpenPopup("Database error");
+        } else {
+            simulationState_ = SimulationState::Stopped;
+
+            currentDay_ = 1;
+            dayTimer_ = 0.0f;
+
+            supplierTruck_.active = false;
+            supplierTruck_.returning = false;
+            supplierTruck_.progress = 0.0f;
+            supplierTruck_.position = supplierCenter_;
+
+            activeSupplierRequestId_ = -1;
+
+            for (VehicleView& vehicle : vehicles_) {
+                vehicle.progress = 0.0f;
+                vehicle.direction = VehicleDirection::ToStore;
+                vehicle.position = warehouseCenter_;
+
+                vehicle.startDelay =
+                    static_cast<float>(vehicle.targetStoreId - 1) * 0.7f;
+            }
 
             refreshWarehouseData();
             refreshSupplierData();
 
-            if (
-                selectedType_ ==
-                SelectedObjectType::Store
-            )
-            {
+            if (selectedType_ == SelectedObjectType::Store) {
                 refreshSelectedStoreData();
             }
         }
-
-        simulationState_ =
-            SimulationState::Stopped;
-
-        currentDay_ = 1;
-        dayTimer_ = 0.0f;
-
-        supplierTruck_.active =
-            false;
-
-        supplierTruck_.returning =
-            false;
-
-        supplierTruck_.progress =
-            0.0f;
-
-        supplierTruck_.position =
-            supplierCenter_;
-
-        activeSupplierRequestId_ =
-            -1;
-
-        for (
-            VehicleView& vehicle :
-            vehicles_
-        )
-        {
-            vehicle.progress =
-                0.0f;
-
-            vehicle.direction =
-                VehicleDirection::ToStore;
-
-            vehicle.position =
-                warehouseCenter_;
-
-            vehicle.startDelay =
-                static_cast<float>(
-                    vehicle.targetStoreId -
-                    1
-                ) * 0.7f;
-        }
     }
+    if (ImGui::BeginPopupModal(
+        "Database error",
+        nullptr,
+        ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::TextUnformatted("Failed to reset database.");
 
+        if (backend_ != nullptr) {
+            ImGui::TextWrapped(
+                "%s",
+                backend_->getLastError().c_str()
+            );
+        } else {
+            ImGui::TextUnformatted("Backend is not connected.");
+        }
+
+        if (ImGui::Button("OK")) {
+            ImGui::CloseCurrentPopup();
+        }
+
+        ImGui::EndPopup();
+    }
     ImGui::SameLine(400.0f);
 
     ImGui::Text("Speed:");

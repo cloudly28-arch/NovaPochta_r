@@ -131,5 +131,6 @@ public:
         const std::string& status
     );
 
-
+    bool copyFrom(const Database& source);
+    std::string getLastError() const;
 };

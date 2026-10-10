@@ -109,9 +109,20 @@ public:
     void processSupplierRequests(
         int currentDay
     );
+    const std::string& getLastError() const;
+    bool startExperiment(
+        const std::string& databasePath,
+        const std::string& schemaPath,
+        int storeCount,
+        int productCount
+    );
 
 private:
     Database database_;
     Warehouse warehouse_;
     bool ready_{false};
+    
+    std::string lastError_;
+    int storeCount_ = 9;
+    int productCount_ = 20;
 };

@@ -196,6 +196,7 @@ private:
     int totalDays_ = 20;
 
     float dayTimer_ = 0.0f;
+    float dataRefreshTimer_ = 0.25f;
 
     float secondsPerDay_ = 8.0f;
 

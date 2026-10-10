@@ -4,23 +4,25 @@
 #include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <iostream>
 
-bool BackendFacade::initialize(
-    const std::string& databasePath
-)
+bool BackendFacade::initialize(const std::string& databasePath)
 {
+    lastError_.clear();
     ready_ = false;
 
     database_.close();
     warehouse_ = Warehouse{};
 
-    if (!database_.open(databasePath))
-    {
+    if (!database_.open(databasePath)) {
+        lastError_ = "Cannot open database: " + databasePath;
         return false;
     }
 
-    if (!database_.loadWarehouse(warehouse_))
-    {
+    if (!database_.loadWarehouse(warehouse_)) {
+        lastError_ = "Cannot load warehouse: " + databasePath +
+                     "\nSQLite: " + database_.getLastError();
+
         database_.close();
         return false;
     }
@@ -28,59 +30,104 @@ bool BackendFacade::initialize(
     ready_ = true;
     return true;
 }
+
 bool BackendFacade::resetDatabase(
     const std::string& databasePath,
     const std::string& schemaPath
 )
 {
-    ready_ = false;
+    lastError_.clear();
 
-    database_.close();
-    warehouse_ = Warehouse{};
+    std::ifstream schemaFile(schemaPath, std::ios::binary);
 
-    std::ifstream schemaFile(
-        schemaPath,
-        std::ios::binary
-    );
-
-    if (!schemaFile)
-    {
+    if (!schemaFile) {
+        lastError_ = "Cannot open schema: " + schemaPath;
         return false;
     }
 
     std::ostringstream buffer;
     buffer << schemaFile.rdbuf();
 
-    const std::string schema =
-        buffer.str();
+    const std::string schema = buffer.str();
 
-    if (schema.empty())
-    {
+    if (schema.empty() || schemaFile.bad()) {
+        lastError_ = "Schema is empty or unreadable: " + schemaPath;
         return false;
     }
 
-    std::error_code error;
+    Database prepared;
 
-    std::filesystem::remove(
-        databasePath,
-        error
-    );
-
-    Database newDatabase;
-
-    if (!newDatabase.open(databasePath))
-    {
+    if (!prepared.open(":memory:")) {
+        lastError_ = "Cannot create temporary database";
         return false;
     }
 
-    if (!newDatabase.executeSql(schema))
-    {
+    if (!prepared.executeSql(schema)) {
+        lastError_ = "Invalid schema: " + schemaPath +
+                     "\nSQLite: " + prepared.getLastError();
         return false;
     }
 
-    newDatabase.close();
+    // Настраиваем магазины и товары в новой базе.
+    const std::string configureSql =
+        "BEGIN TRANSACTION;"
+
+        "DELETE FROM stores WHERE id > " +
+        std::to_string(storeCount_) + ";"
+
+        "DELETE FROM products WHERE id > " +
+        std::to_string(productCount_) + ";"
+
+        "COMMIT;";
+
+    if (!prepared.executeSql(configureSql)) {
+        lastError_ = "Cannot configure experiment:\n" +
+                     prepared.getLastError();
+        return false;
+    }
+
+    Warehouse initialWarehouse;
+
+    if (!prepared.loadWarehouse(initialWarehouse)) {
+        lastError_ = "Schema does not contain a valid warehouse";
+        return false;
+    }
+
+    const std::filesystem::path parent =
+        std::filesystem::path(databasePath).parent_path();
+
+    if (!parent.empty()) {
+        std::error_code error;
+        std::filesystem::create_directories(parent, error);
+
+        if (error) {
+            lastError_ = "Cannot create database directory: " +
+                         error.message();
+            return false;
+        }
+    }
+
+    Database destination;
+
+    if (!destination.open(databasePath)) {
+        lastError_ = "Cannot open destination database: " +
+                     databasePath;
+        return false;
+    }
+
+    if (!destination.copyFrom(prepared)) {
+        lastError_ = "Cannot reset database: " +
+                     destination.getLastError();
+        return false;
+    }
+
+    destination.close();
 
     return initialize(databasePath);
+}
+const std::string& BackendFacade::getLastError() const
+{
+    return lastError_;
 }
 bool BackendFacade::isReady() const
 {
@@ -355,73 +402,61 @@ bool BackendFacade::getActiveStoreOrder(
 
     return true;
 }
-void BackendFacade::simulateStoreSales(
-    int currentDay
-)
+void BackendFacade::simulateStoreSales(int currentDay)
 {
-    if (
-        !ready_ ||
-        currentDay <= 0
-    )
-    {
+    if (!ready_ || currentDay <= 0) {
+        return;
+    }
+
+    if (!database_.beginTransaction()) {
+        lastError_ = "Cannot start sales transaction: " +
+                     database_.getLastError();
+        std::cerr << lastError_ << '\n';
         return;
     }
 
     std::mt19937 generator(
-        static_cast<unsigned int>(
-            currentDay * 1009
-        )
+        static_cast<unsigned int>(currentDay * 1009)
     );
 
-    std::uniform_int_distribution<int>
-        salesDistribution(
-            5,
-            15
-        );
+    std::uniform_int_distribution<int> salesDistribution(5, 15);
 
-    const std::vector<StoreInfo> stores =
-        getStores();
+    const std::vector<StoreInfo> stores = getStores();
 
-    for (
-        const StoreInfo& store :
-        stores
-    )
-    {
-        const std::vector<ProductStockInfo>
-            inventory =
-                getStoreInventory(
-                    store.id
-                );
+    for (const StoreInfo& store : stores) {
+        const std::vector<ProductStockInfo> inventory =
+            getStoreInventory(store.id);
 
-        for (
-            const ProductStockInfo& product :
-            inventory
-        )
-        {
-            if (
-                product.quantity <= 0
-            )
-            {
+        for (const ProductStockInfo& product : inventory) {
+            if (product.quantity <= 0) {
                 continue;
             }
 
-            int sold =
-                salesDistribution(
-                    generator
-                );
-
-            sold =
-                std::min(
-                    sold,
-                    product.quantity
-                );
-
-            database_.changeStoreQuantity(
-                store.id,
-                product.productId,
-                -sold
+            const int sold = std::min(
+                salesDistribution(generator),
+                product.quantity
             );
+
+            if (!database_.changeStoreQuantity(
+                    store.id,
+                    product.productId,
+                    -sold)) {
+                lastError_ = "Cannot update store stock: " +
+                             database_.getLastError();
+
+                database_.rollback();
+                std::cerr << lastError_ << '\n';
+                return;
+            }
         }
+    }
+
+    if (!database_.commit()) {
+        lastError_ = "Cannot save store sales: " +
+                     database_.getLastError();
+
+        database_.rollback();
+        std::cerr << lastError_ << '\n';
     }
 }
 void BackendFacade::processStoreDeliveries(
@@ -855,4 +890,33 @@ void BackendFacade::processSupplierRequests(
             deliveryDay
         );
     }
+}
+
+bool BackendFacade::startExperiment(
+    const std::string& databasePath,
+    const std::string& schemaPath,
+    int storeCount,
+    int productCount
+)
+{
+    if (storeCount < 3 || storeCount > 9 ||
+        productCount < 12 || productCount > 20) {
+        lastError_ =
+            "Stores must be 3..9 and products must be 12..20";
+        return false;
+    }
+
+    const int previousStoreCount = storeCount_;
+    const int previousProductCount = productCount_;
+
+    storeCount_ = storeCount;
+    productCount_ = productCount;
+
+    if (!resetDatabase(databasePath, schemaPath)) {
+        storeCount_ = previousStoreCount;
+        productCount_ = previousProductCount;
+        return false;
+    }
+
+    return true;
 }

@@ -24,3 +24,5 @@ imgui.ini
 # Backend runtime artifacts
 output.txt
 warehouse_backend
+
+/front/build*/

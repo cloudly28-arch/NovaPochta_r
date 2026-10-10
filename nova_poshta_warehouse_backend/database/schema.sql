@@ -1,9 +1,38 @@
 BEGIN TRANSACTION;
+
+CREATE TABLE stores (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE
+);
+
+INSERT INTO "stores" VALUES(1,'FreshMart');
+INSERT INTO "stores" VALUES(2,'Green Basket');
+INSERT INTO "stores" VALUES(3,'Bakery House');
+INSERT INTO "stores" VALUES(4,'MeatPoint');
+INSERT INTO "stores" VALUES(5,'Sweet Corner');
+INSERT INTO "stores" VALUES(6,'Daily Food');
+INSERT INTO "stores" VALUES(7,'CleanHome');
+INSERT INTO "stores" VALUES(8,'TechBox');
+INSERT INTO "stores" VALUES(9,'PaperLine');
+
+CREATE TABLE warehouses (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    address TEXT
+);
+
+INSERT INTO "warehouses" VALUES(
+    1,
+    'Центральный склад Nova Poshta',
+    'Основной учебный склад'
+);
+
 CREATE TABLE products (
     id INTEGER PRIMARY KEY,
     name TEXT NOT NULL UNIQUE,
     category TEXT NOT NULL
 );
+
 INSERT INTO "products" VALUES(1,'Молоко','Пищевой');
 INSERT INTO "products" VALUES(2,'Хлеб','Пищевой');
 INSERT INTO "products" VALUES(3,'Яблоки','Пищевой');
@@ -61,19 +90,7 @@ INSERT INTO "store_inventory" VALUES(8,20,60,90,15);
 INSERT INTO "store_inventory" VALUES(9,18,85,130,25);
 INSERT INTO "store_inventory" VALUES(9,19,120,180,30);
 INSERT INTO "store_inventory" VALUES(9,20,70,100,20);
-CREATE TABLE stores (
-    id INTEGER PRIMARY KEY,
-    name TEXT NOT NULL UNIQUE
-);
-INSERT INTO "stores" VALUES(1,'FreshMart');
-INSERT INTO "stores" VALUES(2,'Green Basket');
-INSERT INTO "stores" VALUES(3,'Bakery House');
-INSERT INTO "stores" VALUES(4,'MeatPoint');
-INSERT INTO "stores" VALUES(5,'Sweet Corner');
-INSERT INTO "stores" VALUES(6,'Daily Food');
-INSERT INTO "stores" VALUES(7,'CleanHome');
-INSERT INTO "stores" VALUES(8,'TechBox');
-INSERT INTO "stores" VALUES(9,'PaperLine');
+
 CREATE TABLE warehouse_inventory (
     warehouse_id INTEGER NOT NULL,
     product_id INTEGER NOT NULL,
@@ -104,12 +121,7 @@ INSERT INTO "warehouse_inventory" VALUES(1,17,230,480,60);
 INSERT INTO "warehouse_inventory" VALUES(1,18,255,505,60);
 INSERT INTO "warehouse_inventory" VALUES(1,19,280,530,60);
 INSERT INTO "warehouse_inventory" VALUES(1,20,180,430,60);
-CREATE TABLE warehouses (
-    id INTEGER PRIMARY KEY,
-    name TEXT NOT NULL,
-    address TEXT
-);
-INSERT INTO "warehouses" VALUES(1,'Центральный склад Nova Poshta','Основной учебный склад');
+
 CREATE VIEW store_inventory_view AS
 SELECT
     s.id AS store_id,

@@ -1185,3 +1185,35 @@ bool Database::setOrderStatus(
     return ok;
 }
 
+std::string Database::getLastError() const
+{
+    if (db_ == nullptr) {
+        return "Database is not open";
+    }
+
+    return sqlite3_errmsg(db_);
+}
+
+bool Database::copyFrom(const Database& source)
+{
+    if (db_ == nullptr || source.db_ == nullptr) {
+        return false;
+    }
+
+    sqlite3_backup* backup = sqlite3_backup_init(
+        db_,
+        "main",
+        source.db_,
+        "main"
+    );
+
+    if (backup == nullptr) {
+        return false;
+    }
+
+    const int stepResult = sqlite3_backup_step(backup, -1);
+    const int finishResult = sqlite3_backup_finish(backup);
+
+    return stepResult == SQLITE_DONE &&
+           finishResult == SQLITE_OK;
+}
