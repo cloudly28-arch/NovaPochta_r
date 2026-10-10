@@ -240,4 +240,9 @@ private:
 
     bool supplierTextureLoaded_ = false;
     bool supplierTruckTextureLoaded_ = false;
+
+    std::vector<WarehouseBatchRow> warehouseBatches_;
+    bool warehouseBatchesLoaded_ = false;
+
+    void drawWarehouseBatches();
 };

@@ -11,9 +11,9 @@ INSERT INTO "stores" VALUES(3,'Bakery House');
 INSERT INTO "stores" VALUES(4,'MeatPoint');
 INSERT INTO "stores" VALUES(5,'Sweet Corner');
 INSERT INTO "stores" VALUES(6,'Daily Food');
-INSERT INTO "stores" VALUES(7,'CleanHome');
-INSERT INTO "stores" VALUES(8,'TechBox');
-INSERT INTO "stores" VALUES(9,'PaperLine');
+INSERT INTO "stores" VALUES(7,'FrozenFood');
+INSERT INTO "stores" VALUES(8,'TeaCorner');
+INSERT INTO "stores" VALUES(9,'GrainMarket');
 
 CREATE TABLE warehouses (
     id INTEGER PRIMARY KEY,
@@ -46,13 +46,13 @@ INSERT INTO "products" VALUES(10,'Сок','Пищевой');
 INSERT INTO "products" VALUES(11,'Сыр','Пищевой');
 INSERT INTO "products" VALUES(12,'Йогурт','Пищевой');
 INSERT INTO "products" VALUES(13,'Мука','Пищевой');
-INSERT INTO "products" VALUES(14,'Средство для мытья посуды','Бытовая химия');
-INSERT INTO "products" VALUES(15,'Стиральный порошок','Бытовая химия');
-INSERT INTO "products" VALUES(16,'Батарейки','Электроника');
-INSERT INTO "products" VALUES(17,'USB-кабель','Электроника');
-INSERT INTO "products" VALUES(18,'Бумага A4','Канцелярия');
-INSERT INTO "products" VALUES(19,'Ручки','Канцелярия');
-INSERT INTO "products" VALUES(20,'Картонные коробки','Упаковка');
+INSERT INTO "products" VALUES(14,'Замороженная рыба','Замороженные продукты');
+INSERT INTO "products" VALUES(15,'Пельмени','Замороженные продукты');
+INSERT INTO "products" VALUES(16,'Чай','Напитки');
+INSERT INTO "products" VALUES(17,'Кофе','Напитки');
+INSERT INTO "products" VALUES(18,'Рис','Крупы');
+INSERT INTO "products" VALUES(19,'Гречка','Крупы');
+INSERT INTO "products" VALUES(20,'Мороженое','Замороженные продукты');
 CREATE TABLE store_inventory (
     store_id INTEGER NOT NULL,
     product_id INTEGER NOT NULL,
@@ -86,10 +86,10 @@ INSERT INTO "store_inventory" VALUES(7,15,35,65,10);
 INSERT INTO "store_inventory" VALUES(7,20,80,120,20);
 INSERT INTO "store_inventory" VALUES(8,16,65,100,20);
 INSERT INTO "store_inventory" VALUES(8,17,45,75,15);
-INSERT INTO "store_inventory" VALUES(8,20,60,90,15);
+INSERT INTO "store_inventory" VALUES(8,10,60,90,15);
 INSERT INTO "store_inventory" VALUES(9,18,85,130,25);
 INSERT INTO "store_inventory" VALUES(9,19,120,180,30);
-INSERT INTO "store_inventory" VALUES(9,20,70,100,20);
+INSERT INTO "store_inventory" VALUES(9,13,70,100,20);
 
 CREATE TABLE warehouse_inventory (
     warehouse_id INTEGER NOT NULL,
@@ -218,5 +218,120 @@ CREATE TABLE supplier_requests
     FOREIGN KEY (product_id)
         REFERENCES products(id)
         ON DELETE RESTRICT
+);
+ALTER TABLE products
+ADD COLUMN unit_price_cents INTEGER NOT NULL DEFAULT 10000
+CHECK(unit_price_cents > 0);
+
+ALTER TABLE products
+ADD COLUMN shelf_life_days INTEGER NOT NULL DEFAULT 30
+CHECK(shelf_life_days > 0);
+
+UPDATE products
+SET unit_price_cents = CASE id
+    WHEN 1 THEN 9000
+    WHEN 2 THEN 5000
+    WHEN 3 THEN 12000
+    WHEN 4 THEN 11000
+    WHEN 5 THEN 6000
+    WHEN 6 THEN 35000
+    WHEN 7 THEN 25000
+    WHEN 8 THEN 10000
+    WHEN 9 THEN 8000
+    WHEN 10 THEN 12000
+    WHEN 11 THEN 30000
+    WHEN 12 THEN 7000
+    WHEN 13 THEN 6000
+    WHEN 14 THEN 28000
+    WHEN 15 THEN 20000
+    WHEN 16 THEN 15000
+    WHEN 17 THEN 25000
+    WHEN 18 THEN 9000
+    WHEN 19 THEN 10000
+    WHEN 20 THEN 8000
+    ELSE 10000
+END;
+
+UPDATE products
+SET shelf_life_days = CASE id
+    WHEN 1 THEN 7
+    WHEN 2 THEN 3
+    WHEN 3 THEN 14
+    WHEN 4 THEN 7
+    WHEN 5 THEN 30
+    WHEN 6 THEN 3
+    WHEN 7 THEN 10
+    WHEN 8 THEN 180
+    WHEN 9 THEN 90
+    WHEN 10 THEN 90
+    WHEN 11 THEN 30
+    WHEN 12 THEN 10
+    WHEN 13 THEN 180
+    WHEN 14 THEN 120
+    WHEN 15 THEN 120
+    WHEN 16 THEN 365
+    WHEN 17 THEN 365
+    WHEN 18 THEN 365
+    WHEN 19 THEN 365
+    WHEN 20 THEN 90
+    ELSE 30
+END;
+CREATE TABLE warehouse_batches (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    warehouse_id INTEGER NOT NULL,
+    product_id INTEGER NOT NULL,
+    quantity INTEGER NOT NULL CHECK (quantity >= 0),
+    received_day INTEGER NOT NULL CHECK (received_day >= 1),
+    expires_day INTEGER NOT NULL,
+    unit_price_cents INTEGER NOT NULL CHECK (unit_price_cents > 0),
+
+    FOREIGN KEY (warehouse_id)
+        REFERENCES warehouses(id) ON DELETE CASCADE,
+    FOREIGN KEY (product_id)
+        REFERENCES products(id) ON DELETE CASCADE,
+    CHECK (expires_day > received_day)
+);
+
+CREATE INDEX idx_warehouse_batches_expiry
+    ON warehouse_batches (
+        warehouse_id,
+        product_id,
+        expires_day,
+        id
+    );
+
+INSERT INTO warehouse_batches (
+    warehouse_id,
+    product_id,
+    quantity,
+    received_day,
+    expires_day,
+    unit_price_cents
+)
+SELECT
+    wi.warehouse_id,
+    wi.product_id,
+    wi.quantity,
+    1,
+    1 + p.shelf_life_days,
+    p.unit_price_cents
+FROM warehouse_inventory AS wi
+JOIN products AS p ON p.id = wi.product_id
+WHERE wi.quantity > 0;
+CREATE TABLE warehouse_writeoffs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    batch_id INTEGER NOT NULL,
+    warehouse_id INTEGER NOT NULL,
+    product_id INTEGER NOT NULL,
+    writeoff_day INTEGER NOT NULL CHECK (writeoff_day >= 1),
+    quantity INTEGER NOT NULL CHECK (quantity > 0),
+    loss_cents INTEGER NOT NULL CHECK (loss_cents > 0),
+
+    FOREIGN KEY (batch_id)
+        REFERENCES warehouse_batches(id) ON DELETE CASCADE,
+    FOREIGN KEY (warehouse_id)
+        REFERENCES warehouses(id) ON DELETE CASCADE,
+    FOREIGN KEY (product_id)
+        REFERENCES products(id) ON DELETE CASCADE
 );
 COMMIT;

@@ -27,6 +27,8 @@ struct WarehouseStockInfo
     int quantity{};
     int capacity{};
     int minStock{};
+    int unitPriceCents{};
+    int shelfLifeDays{};
 };
 struct SupplierRequestInfo
 {
@@ -118,6 +120,10 @@ public:
     );
     void processSupplierDeliveries(int currentDay);
 
+    bool getWarehouseBatches(
+        std::vector<WarehouseBatchRow>& batches
+    ) const;
+    bool writeOffExpiredBatches(int currentDay);
 private:
     Database database_;
     Warehouse warehouse_;

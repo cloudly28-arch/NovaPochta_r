@@ -22,6 +22,8 @@ struct WarehouseStockRow
     int quantity{};
     int capacity{};
     int minStock{};
+    int unitPriceCents{};
+    int shelfLifeDays{};
 };
 
 struct SupplierRequestRow
@@ -56,6 +58,16 @@ struct StoreOrderRow
     std::string status;
 
     std::vector<OrderItemRow> items;
+};
+struct WarehouseBatchRow {
+    int id{};
+    int warehouseId{};
+    int productId{};
+    std::string productName;
+    int quantity{};
+    int receivedDay{};
+    int expiresDay{};
+    int unitPriceCents{};
 };
 class Database {
 private:
@@ -98,7 +110,18 @@ public:
     );
 
     bool setWarehouseQuantity(int warehouseId, int productId, int quantity);
-    bool changeWarehouseQuantity(int warehouseId, int productId, int delta);
+    bool changeWarehouseQuantity(
+        int warehouseId,
+        int productId,
+        int delta,
+        int currentDay = 1
+    );
+
+    bool changeWarehouseQuantityRaw(
+        int warehouseId,
+        int productId,
+        int delta
+    );
     bool setStoreQuantity(int storeId, int productId, int quantity);
     bool changeStoreQuantity(int storeId, int productId, int delta);
 
@@ -133,4 +156,19 @@ public:
 
     bool copyFrom(const Database& source);
     std::string getLastError() const;
+
+    bool getWarehouseBatches(
+        int warehouseId,
+            std::vector<WarehouseBatchRow>& batches
+        ) const;
+        bool createWarehouseBatch(
+        int warehouseId,
+        int productId,
+        int quantity,
+        int receivedDay
+    );
+    bool writeOffExpiredBatches(
+        int warehouseId,
+        int currentDay
+    );
 };

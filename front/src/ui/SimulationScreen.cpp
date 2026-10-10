@@ -1512,7 +1512,7 @@ void SimulationScreen::drawInfoPanel()
             if (
                 ImGui::BeginTable(
                     "StoreInventoryTable",
-                    5,
+                    7,
                     inventoryFlags
                 )
             )
@@ -1536,7 +1536,8 @@ void SimulationScreen::drawInfoPanel()
                 ImGui::TableSetupColumn(
                     "Status"
                 );
-
+                ImGui::TableSetupColumn("Price, RUB");
+                ImGui::TableSetupColumn("Shelf life, days");
                 ImGui::TableHeadersRow();
 
                 for (
@@ -1738,11 +1739,12 @@ void SimulationScreen::drawInfoPanel()
                         ImGuiTableFlags_RowBg |
                         ImGuiTableFlags_Resizable |
                         ImGuiTableFlags_SizingStretchProp;
+                    drawWarehouseBatches();
 
                     if (
                         ImGui::BeginTable(
                             "WarehouseInventoryTable",
-                            5,
+                            7,
                             flags
                         )
                     )
@@ -1768,7 +1770,8 @@ void SimulationScreen::drawInfoPanel()
                         ImGui::TableSetupColumn(
                             "Status"
                         );
-
+                        ImGui::TableSetupColumn("Цена, руб.");
+                        ImGui::TableSetupColumn("Срок хранения, дней");
                         ImGui::TableHeadersRow();
 
                         for (
@@ -1777,6 +1780,11 @@ void SimulationScreen::drawInfoPanel()
                         )
                         {
                             ImGui::TableNextRow();
+                            ImGui::TableSetColumnIndex(5);
+                            ImGui::Text("%.2f", item.unitPriceCents / 100.0);
+
+                            ImGui::TableSetColumnIndex(6);
+                            ImGui::Text("%d", item.shelfLifeDays);
 
                             ImGui::TableSetColumnIndex(0);
 
@@ -2549,6 +2557,8 @@ refreshSelectedStoreData()
 }
 void SimulationScreen::refreshWarehouseData()
 {
+    warehouseBatches_.clear();
+    warehouseBatchesLoaded_ = false;
     warehouseInventory_.clear();
 
     if (
@@ -2561,6 +2571,8 @@ void SimulationScreen::refreshWarehouseData()
 
     warehouseInventory_ =
         backend_->getWarehouseInventory();
+    warehouseBatchesLoaded_ =
+        backend_->getWarehouseBatches(warehouseBatches_);
 }
 void SimulationScreen::refreshSupplierData()
 {
@@ -2652,6 +2664,10 @@ void SimulationScreen::advanceDay()
         backend_->isReady()
     )
     {
+        if (!backend_->writeOffExpiredBatches(currentDay_)) {
+            std::cerr << backend_->getLastError() << '\n';
+            return;
+        }
         backend_->processSupplierDeliveries(currentDay_);
         backend_->processStoreDeliveries(
             currentDay_
@@ -2668,5 +2684,78 @@ void SimulationScreen::advanceDay()
         backend_->processSupplierRequests(
             currentDay_
         );
+    }
+}
+
+void SimulationScreen::drawWarehouseBatches() {
+    ImGui::Separator();
+    ImGui::TextUnformatted("Партии товаров");
+
+    if (!warehouseBatchesLoaded_) {
+        ImGui::TextUnformatted(
+            "Не удалось загрузить партии. "
+            "Начните новый эксперимент по обновлённой схеме."
+        );
+        return;
+    }
+
+    if (warehouseBatches_.empty()) {
+        ImGui::TextUnformatted("На складе нет партий.");
+        return;
+    }
+
+    const ImGuiTableFlags flags =
+        ImGuiTableFlags_Borders |
+        ImGuiTableFlags_RowBg |
+        ImGuiTableFlags_Resizable |
+        ImGuiTableFlags_ScrollX;
+
+    if (ImGui::BeginTable("WarehouseBatchesTable", 7, flags)) {
+        ImGui::TableSetupColumn("Партия");
+        ImGui::TableSetupColumn("Товар");
+        ImGui::TableSetupColumn("Количество");
+        ImGui::TableSetupColumn("Поступление");
+        ImGui::TableSetupColumn("Годен до дня");
+        ImGui::TableSetupColumn("Цена, руб.");
+        ImGui::TableSetupColumn("Состояние");
+        ImGui::TableHeadersRow();
+
+        for (const WarehouseBatchRow& batch : warehouseBatches_) {
+            ImGui::TableNextRow();
+
+            ImGui::TableSetColumnIndex(0);
+            ImGui::Text("%d", batch.id);
+
+            ImGui::TableSetColumnIndex(1);
+            ImGui::TextUnformatted(batch.productName.c_str());
+
+            ImGui::TableSetColumnIndex(2);
+            ImGui::Text("%d", batch.quantity);
+
+            ImGui::TableSetColumnIndex(3);
+            ImGui::Text("%d", batch.receivedDay);
+
+            ImGui::TableSetColumnIndex(4);
+            ImGui::Text("%d", batch.expiresDay - 1);
+
+            ImGui::TableSetColumnIndex(5);
+            ImGui::Text("%.2f", batch.unitPriceCents / 100.0);
+
+            ImGui::TableSetColumnIndex(6);
+
+            if (currentDay_ >= batch.expiresDay) {
+                ImGui::TextColored(
+                    ImVec4(1.0f, 0.3f, 0.3f, 1.0f),
+                    "Просрочена"
+                );
+            } else {
+                ImGui::Text(
+                    "Осталось дней: %d",
+                    batch.expiresDay - currentDay_
+                );
+            }
+        }
+
+        ImGui::EndTable();
     }
 }

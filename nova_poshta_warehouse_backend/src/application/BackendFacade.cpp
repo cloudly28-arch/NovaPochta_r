@@ -243,7 +243,9 @@ BackendFacade::getWarehouseInventory() const
                 row.productName,
                 row.quantity,
                 row.capacity,
-                row.minStock
+                row.minStock,
+                row.unitPriceCents,
+                row.shelfLifeDays
             }
         );
     }
@@ -303,47 +305,77 @@ bool BackendFacade::createSupplierRequest(
     );
 }
 
-bool BackendFacade::completeSupplierRequest(
-    int requestId
-)
-{
-    if (!ready_)
-    {
+bool BackendFacade::completeSupplierRequest(int requestId) {
+    if (!ready_) {
         return false;
     }
 
     const std::vector<SupplierRequestRow> requests =
         database_.getSupplierRequests();
 
-    for (const SupplierRequestRow& request : requests)
-    {
-        if (request.id != requestId)
-        {
+    for (const SupplierRequestRow& request : requests) {
+        if (request.id != requestId) {
             continue;
         }
 
-        if (request.status == "Delivered")
-        {
+        if (request.status == "Delivered") {
             return true;
         }
 
-        if (
-            !database_.changeWarehouseQuantity(
-                warehouse_.getId(),
-                request.productId,
-                request.requestedQuantity
-            )
-        )
-        {
+        if (request.status != "Created" &&
+            request.status != "InTransit") {
+            lastError_ = "Supplier request cannot be delivered";
             return false;
         }
 
-        return database_.setSupplierRequestStatus(
-            request.id,
-            "Delivered"
-        );
+        if (!database_.beginTransaction()) {
+            lastError_ = database_.getLastError();
+            return false;
+        }
+
+        const bool stockUpdated =
+            database_.changeWarehouseQuantity(
+                warehouse_.getId(),
+                request.productId,
+                request.requestedQuantity
+            );
+
+        const bool batchCreated =
+            stockUpdated &&
+            database_.createWarehouseBatch(
+                warehouse_.getId(),
+                request.productId,
+                request.requestedQuantity,
+                request.deliveryDay
+            );
+
+        const bool statusUpdated =
+            batchCreated &&
+            database_.setSupplierRequestStatus(
+                request.id,
+                "Delivered"
+            );
+
+        if (!statusUpdated) {
+            lastError_ =
+                "Failed to receive supplier delivery: " +
+                database_.getLastError();
+
+            database_.rollback();
+            return false;
+        }
+
+        if (!database_.commit()) {
+            lastError_ = database_.getLastError();
+            database_.rollback();
+            return false;
+        }
+
+        lastError_.clear();
+        return true;
     }
 
+    lastError_ = "Supplier request not found";
     return false;
 }
 bool BackendFacade::getActiveStoreOrder(
@@ -569,7 +601,6 @@ void BackendFacade::processStoreOrders(
     const std::vector<StoreInfo> stores =
         getStores();
 
-    // Сначала магазины создают новые заказы.
     for (
         const StoreInfo& store :
         stores
@@ -622,12 +653,10 @@ void BackendFacade::processStoreOrders(
                 currentDay + 1
             );
 
-            // Один заказ магазина за день.
             break;
         }
     }
 
-    // Теперь склад обрабатывает активные заказы.
     for (
         const StoreInfo& store :
         stores
@@ -717,7 +746,8 @@ void BackendFacade::processStoreOrders(
                     database_.changeWarehouseQuantity(
                         warehouse_.getId(),
                         item.productId,
-                        -allocatedNow
+                        -allocatedNow,
+                        currentDay
                     )
                 )
                 {
@@ -944,4 +974,36 @@ void BackendFacade::processSupplierDeliveries(int currentDay)
             }
         }
     }
+}
+
+bool BackendFacade::getWarehouseBatches(
+    std::vector<WarehouseBatchRow>& batches
+) const {
+    batches.clear();
+
+    if (!ready_) {
+        return false;
+    }
+
+    return database_.getWarehouseBatches(
+        warehouse_.getId(),
+        batches
+    );
+}
+
+bool BackendFacade::writeOffExpiredBatches(int currentDay) {
+    if (!ready_) {
+        lastError_ = "Database is not ready";
+        return false;
+    }
+
+    if (!database_.writeOffExpiredBatches(
+            warehouse_.getId(), currentDay
+        )) {
+        lastError_ = "Failed to write off expired batches";
+        return false;
+    }
+
+    lastError_.clear();
+    return true;
 }

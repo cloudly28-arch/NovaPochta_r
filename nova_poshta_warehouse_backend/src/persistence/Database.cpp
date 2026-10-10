@@ -324,15 +324,18 @@ Database::getWarehouseInventory(
 
     const char* sql =
         "SELECT "
-        "warehouse_id, "
-        "product_id, "
-        "product_name, "
-        "quantity, "
-        "capacity, "
-        "min_stock "
-        "FROM warehouse_inventory_view "
-        "WHERE warehouse_id=? "
-        "ORDER BY product_id";
+        "wi.warehouse_id, "
+        "wi.product_id, "
+        "p.name, "
+        "wi.quantity, "
+        "wi.capacity, "
+        "wi.min_stock, "
+        "p.unit_price_cents, "
+        "p.shelf_life_days "
+        "FROM warehouse_inventory wi "
+        "JOIN products p ON p.id = wi.product_id "
+        "WHERE wi.warehouse_id=? "
+        "ORDER BY wi.product_id";
 
     sqlite3_stmt* stmt = nullptr;
 
@@ -404,6 +407,8 @@ Database::getWarehouseInventory(
                 stmt,
                 5
             );
+        row.unitPriceCents = sqlite3_column_int(stmt, 6);
+        row.shelfLifeDays = sqlite3_column_int(stmt, 7);  
 
         result.push_back(
             std::move(row)
@@ -721,7 +726,7 @@ bool Database::setWarehouseQuantity(int warehouseId, int productId, int quantity
     const bool ok = sqlite3_step(stmt) == SQLITE_DONE && sqlite3_changes(db_) > 0;
     sqlite3_finalize(stmt); return ok;
 }
-bool Database::changeWarehouseQuantity(
+bool Database::changeWarehouseQuantityRaw(
     int warehouseId,
     int productId,
     int delta
@@ -1216,4 +1221,287 @@ bool Database::copyFrom(const Database& source)
 
     return stepResult == SQLITE_DONE &&
            finishResult == SQLITE_OK;
+}
+
+bool Database::getWarehouseBatches(
+    int warehouseId,
+    std::vector<WarehouseBatchRow>& batches
+) const {
+    batches.clear();
+
+    if (db_ == nullptr) {
+        return false;
+    }
+
+    const char* sql =
+        "SELECT b.id, b.warehouse_id, b.product_id, p.name, "
+        "b.quantity, b.received_day, b.expires_day, "
+        "b.unit_price_cents "
+        "FROM warehouse_batches AS b "
+        "JOIN products AS p ON p.id = b.product_id "
+        "WHERE b.warehouse_id = ? AND b.quantity > 0 "
+        "ORDER BY b.expires_day, b.id;";
+
+    sqlite3_stmt* statement = nullptr;
+
+    if (sqlite3_prepare_v2(
+            db_, sql, -1, &statement, nullptr
+        ) != SQLITE_OK) {
+        sqlite3_finalize(statement);
+        return false;
+    }
+
+    if (sqlite3_bind_int(
+            statement, 1, warehouseId
+        ) != SQLITE_OK) {
+        sqlite3_finalize(statement);
+        return false;
+    }
+
+    std::vector<WarehouseBatchRow> result;
+    int status = SQLITE_OK;
+
+    while ((status = sqlite3_step(statement)) == SQLITE_ROW) {
+        WarehouseBatchRow batch;
+
+        batch.id = sqlite3_column_int(statement, 0);
+        batch.warehouseId = sqlite3_column_int(statement, 1);
+        batch.productId = sqlite3_column_int(statement, 2);
+
+        const unsigned char* name =
+            sqlite3_column_text(statement, 3);
+
+        if (name != nullptr) {
+            batch.productName =
+                reinterpret_cast<const char*>(name);
+        }
+
+        batch.quantity = sqlite3_column_int(statement, 4);
+        batch.receivedDay = sqlite3_column_int(statement, 5);
+        batch.expiresDay = sqlite3_column_int(statement, 6);
+        batch.unitPriceCents =
+            sqlite3_column_int(statement, 7);
+
+        result.push_back(batch);
+    }
+
+    const int finalizeStatus = sqlite3_finalize(statement);
+
+    if (status != SQLITE_DONE || finalizeStatus != SQLITE_OK) {
+        return false;
+    }
+
+    batches.swap(result);
+    return true;
+}
+
+bool Database::createWarehouseBatch(
+    int warehouseId,
+    int productId,
+    int quantity,
+    int receivedDay
+) {
+    if (db_ == nullptr || quantity <= 0 || receivedDay < 1) {
+        return false;
+    }
+
+    const char* sql =
+        "INSERT INTO warehouse_batches ("
+        "warehouse_id, product_id, quantity, "
+        "received_day, expires_day, unit_price_cents"
+        ") "
+        "SELECT ?, id, ?, ?, ? + shelf_life_days, "
+        "unit_price_cents "
+        "FROM products WHERE id = ?;";
+
+    sqlite3_stmt* statement = nullptr;
+
+    if (sqlite3_prepare_v2(
+            db_, sql, -1, &statement, nullptr
+        ) != SQLITE_OK) {
+        sqlite3_finalize(statement);
+        return false;
+    }
+
+    const bool bound =
+        sqlite3_bind_int(statement, 1, warehouseId) == SQLITE_OK &&
+        sqlite3_bind_int(statement, 2, quantity) == SQLITE_OK &&
+        sqlite3_bind_int(statement, 3, receivedDay) == SQLITE_OK &&
+        sqlite3_bind_int(statement, 4, receivedDay) == SQLITE_OK &&
+        sqlite3_bind_int(statement, 5, productId) == SQLITE_OK;
+
+    const bool inserted =
+        bound &&
+        sqlite3_step(statement) == SQLITE_DONE &&
+        sqlite3_changes(db_) == 1;
+
+    const int finalizeStatus = sqlite3_finalize(statement);
+
+    return inserted && finalizeStatus == SQLITE_OK;
+}
+
+bool Database::changeWarehouseQuantity(
+    int warehouseId,
+    int productId,
+    int delta,
+    int currentDay
+) {
+    if (db_ == nullptr || currentDay < 1) {
+        return false;
+    }
+
+    // Поступление: создание партии выполняется отдельно
+    // в транзакции completeSupplierRequest().
+    if (delta >= 0) {
+        return changeWarehouseQuantityRaw(
+            warehouseId, productId, delta
+        );
+    }
+
+    if (!executeSql("SAVEPOINT warehouse_dispatch;")) {
+        return false;
+    }
+
+    const auto cancel = [this]() {
+        executeSql("ROLLBACK TO warehouse_dispatch;");
+        executeSql("RELEASE warehouse_dispatch;");
+        return false;
+    };
+
+    std::vector<WarehouseBatchRow> batches;
+
+    if (!getWarehouseBatches(warehouseId, batches)) {
+        return cancel();
+    }
+
+    long long available = 0;
+
+    for (const WarehouseBatchRow& batch : batches) {
+        if (batch.productId == productId &&
+            batch.expiresDay > currentDay) {
+            available += batch.quantity;
+        }
+    }
+
+    long long remaining = -static_cast<long long>(delta);
+
+    if (available < remaining) {
+        return cancel();
+    }
+
+    // getWarehouseBatches() уже сортирует партии
+    // по ближайшему сроку годности.
+    for (const WarehouseBatchRow& batch : batches) {
+        if (remaining == 0) {
+            break;
+        }
+
+        if (batch.productId != productId ||
+            batch.expiresDay <= currentDay) {
+            continue;
+        }
+
+        const int taken =
+            remaining < batch.quantity
+                ? static_cast<int>(remaining)
+                : batch.quantity;
+
+        const std::string sql =
+            "UPDATE warehouse_batches "
+            "SET quantity = quantity - " +
+            std::to_string(taken) +
+            " WHERE id = " + std::to_string(batch.id) +
+            " AND quantity >= " + std::to_string(taken) + ";";
+
+        if (!executeSql(sql) || sqlite3_changes(db_) != 1) {
+            return cancel();
+        }
+
+        remaining -= taken;
+    }
+
+    if (!changeWarehouseQuantityRaw(
+            warehouseId, productId, delta
+        )) {
+        return cancel();
+    }
+
+    if (!executeSql("RELEASE warehouse_dispatch;")) {
+        return cancel();
+    }
+
+    return true;
+}
+
+bool Database::writeOffExpiredBatches(
+    int warehouseId,
+    int currentDay
+) {
+    if (db_ == nullptr || warehouseId <= 0 || currentDay < 1) {
+        return false;
+    }
+
+    if (!executeSql("SAVEPOINT expired_writeoff;")) {
+        return false;
+    }
+
+    const auto cancel = [this]() {
+        executeSql("ROLLBACK TO expired_writeoff;");
+        executeSql("RELEASE expired_writeoff;");
+        return false;
+    };
+
+    std::vector<WarehouseBatchRow> batches;
+
+    if (!getWarehouseBatches(warehouseId, batches)) {
+        return cancel();
+    }
+
+    for (const WarehouseBatchRow& batch : batches) {
+        if (batch.expiresDay > currentDay) {
+            continue;
+        }
+
+        const long long lossCents =
+            static_cast<long long>(batch.quantity) *
+            batch.unitPriceCents;
+
+        const std::string insertSql =
+            "INSERT INTO warehouse_writeoffs ("
+            "batch_id, warehouse_id, product_id, "
+            "writeoff_day, quantity, loss_cents"
+            ") VALUES (" +
+            std::to_string(batch.id) + "," +
+            std::to_string(warehouseId) + "," +
+            std::to_string(batch.productId) + "," +
+            std::to_string(currentDay) + "," +
+            std::to_string(batch.quantity) + "," +
+            std::to_string(lossCents) + ");";
+
+        if (!executeSql(insertSql)) {
+            return cancel();
+        }
+
+        if (!changeWarehouseQuantityRaw(
+                warehouseId,
+                batch.productId,
+                -batch.quantity
+            )) {
+            return cancel();
+        }
+
+        const std::string updateSql =
+            "UPDATE warehouse_batches SET quantity = 0 "
+            "WHERE id = " + std::to_string(batch.id) + ";";
+
+        if (!executeSql(updateSql) || sqlite3_changes(db_) != 1) {
+            return cancel();
+        }
+    }
+
+    if (!executeSql("RELEASE expired_writeoff;")) {
+        return cancel();
+    }
+
+    return true;
 }
