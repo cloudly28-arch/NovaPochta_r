@@ -116,6 +116,7 @@ public:
         int storeCount,
         int productCount
     );
+    void processSupplierDeliveries(int currentDay);
 
 private:
     Database database_;

@@ -232,4 +232,12 @@ private:
 
     std::filesystem::path
         schemaPath_;
-    };
+
+    std::vector<int> animatedSupplierRequestIds_;
+
+    sf::Texture supplierTexture_;
+    sf::Texture supplierTruckTexture_;
+
+    bool supplierTextureLoaded_ = false;
+    bool supplierTruckTextureLoaded_ = false;
+};

@@ -400,6 +400,7 @@ void SimulationScreen::drawBottomBar()
 
             currentDay_ = 1;
             dayTimer_ = 0.0f;
+            animatedSupplierRequestIds_.clear();
 
             supplierTruck_.active = false;
             supplierTruck_.returning = false;
@@ -681,66 +682,49 @@ void SimulationScreen::drawWarehouse(
             warehouse.getGlobalBounds();
     }
 }
-void SimulationScreen::drawSupplier(
-    sf::RenderWindow& window
-)
+void SimulationScreen::drawSupplier(sf::RenderWindow& window)
 {
-    const sf::Vector2f size(
-        140.0f,
-        90.0f
-    );
+    if (supplierTextureLoaded_) {
+        sf::Sprite supplier(supplierTexture_);
 
-    sf::RectangleShape supplier(
-        size
-    );
+        const sf::Vector2u size = supplierTexture_.getSize();
 
-    supplier.setOrigin(
-        sf::Vector2f(
+        const float scale = std::min(
+            160.0f / static_cast<float>(size.x),
+            105.0f / static_cast<float>(size.y)
+        );
+
+        supplier.setOrigin(sf::Vector2f(
             size.x / 2.0f,
             size.y / 2.0f
-        )
-    );
+        ));
 
-    supplier.setPosition(
-        supplierCenter_
-    );
+        supplier.setPosition(supplierCenter_);
+        supplier.setScale(sf::Vector2f(scale, scale));
 
-    supplier.setFillColor(
-        sf::Color(
-            230,
-            140,
-            30
-        )
-    );
+        supplierBounds_ = supplier.getGlobalBounds();
+        window.draw(supplier);
+    } else {
+        sf::RectangleShape supplier(sf::Vector2f(140.0f, 90.0f));
 
-    supplier.setOutlineThickness(
-        4.0f
-    );
+        supplier.setOrigin(sf::Vector2f(70.0f, 45.0f));
+        supplier.setPosition(supplierCenter_);
+        supplier.setFillColor(sf::Color(230, 140, 30));
 
-    if (
-        selectedType_ ==
-        SelectedObjectType::Supplier
-    )
-    {
-        supplier.setOutlineColor(
-            sf::Color(
-                255,
-                255,
-                100
-            )
-        );
-    }
-    else
-    {
-        supplier.setOutlineColor(
-            sf::Color::White
-        );
+        supplierBounds_ = supplier.getGlobalBounds();
+        window.draw(supplier);
     }
 
-    window.draw(supplier);
+    if (selectedType_ == SelectedObjectType::Supplier) {
+        sf::RectangleShape outline(supplierBounds_.size);
 
-    supplierBounds_ =
-        supplier.getGlobalBounds();
+        outline.setPosition(supplierBounds_.position);
+        outline.setFillColor(sf::Color::Transparent);
+        outline.setOutlineThickness(2.0f);
+        outline.setOutlineColor(sf::Color(255, 220, 100));
+
+        window.draw(outline);
+    }
 }
 void SimulationScreen::drawStores(
     sf::RenderWindow& window
@@ -1075,17 +1059,14 @@ void SimulationScreen::drawSupplierTruck(
         180.0f /
         3.14159265f;
 
-    if (truckTextureLoaded_)
+    if (supplierTruckTextureLoaded_)
     {
-        sf::Sprite truck(
-            truckTexture_
-        );
+        sf::Sprite truck(supplierTruckTexture_);
 
         const sf::Vector2u textureSize =
-            truckTexture_.getSize();
+            supplierTruckTexture_.getSize();
 
-        truck.setOrigin(
-            sf::Vector2f(
+        truck.setOrigin(sf::Vector2f(
                 textureSize.x / 2.0f,
                 textureSize.y / 2.0f
             )
@@ -1116,14 +1097,7 @@ void SimulationScreen::drawSupplierTruck(
             sf::degrees(angle)
         );
 
-        // Отдельный цвет поставщика.
-        truck.setColor(
-            sf::Color(
-                255,
-                170,
-                60
-            )
-        );
+        truck.setColor(sf::Color::White);
 
         window.draw(truck);
     }
@@ -1272,111 +1246,39 @@ void SimulationScreen::updateVehicles(
             vehicle.progress;
     }
 }
-void SimulationScreen::updateSupplierTruck(
-    float deltaTime
-)
+void SimulationScreen::updateSupplierTruck(float deltaTime)
 {
-    if (!supplierTruck_.active)
-    {
+    if (!supplierTruck_.active) {
         return;
     }
 
-    const float movementSpeed =
-        0.12f *
-        simulationSpeed_;
-
     supplierTruck_.progress +=
-        movementSpeed *
-        deltaTime;
+        0.12f * simulationSpeed_ * deltaTime;
 
-    if (
-        supplierTruck_.progress >=
-        1.0f
-    )
-    {
-        supplierTruck_.progress =
-            0.0f;
+    if (supplierTruck_.progress >= 1.0f) {
+        supplierTruck_.progress = 0.0f;
 
-        if (!supplierTruck_.returning)
-        {
-            bool delivered = false;
-
-            if (
-                backend_ != nullptr &&
-                backend_->isReady() &&
-                activeSupplierRequestId_ > 0
-            )
-            {
-                delivered =
-                    backend_->completeSupplierRequest(
-                        activeSupplierRequestId_
-                    );
-            }
-
-            if (delivered)
-            {
-                supplierTruck_.returning =
-                    true;
-
-                refreshWarehouseData();
-                refreshSupplierData();
-            }
-            else
-            {
-                supplierTruck_.active =
-                    false;
-
-                supplierTruck_.returning =
-                    false;
-
-                supplierTruck_.position =
-                    supplierCenter_;
-
-                activeSupplierRequestId_ =
-                    -1;
-
-                return;
-            }
-        }
-        else
-        {
-            // Грузовик вернулся поставщику.
-            supplierTruck_.returning =
-                false;
-
-            supplierTruck_.active =
-                false;
-
-            supplierTruck_.position =
-                supplierCenter_;
+        if (!supplierTruck_.returning) {
+            supplierTruck_.returning = true;
+        } else {
+            supplierTruck_.active = false;
+            supplierTruck_.returning = false;
+            supplierTruck_.position = supplierCenter_;
             activeSupplierRequestId_ = -1;
+            return;
         }
     }
 
-    sf::Vector2f start;
-    sf::Vector2f end;
+    const sf::Vector2f start = supplierTruck_.returning
+        ? warehouseCenter_
+        : supplierCenter_;
 
-    if (!supplierTruck_.returning)
-    {
-        start =
-            supplierCenter_;
-
-        end =
-            warehouseCenter_;
-    }
-    else
-    {
-        start =
-            warehouseCenter_;
-
-        end =
-            supplierCenter_;
-    }
+    const sf::Vector2f end = supplierTruck_.returning
+        ? supplierCenter_
+        : warehouseCenter_;
 
     supplierTruck_.position =
-        start +
-        (end - start) *
-        supplierTruck_.progress;
+        start + (end - start) * supplierTruck_.progress;
 }
 sf::Vector2f
 SimulationScreen::getStorePosition(
@@ -2568,6 +2470,21 @@ void SimulationScreen::loadTextures()
         truckTexture_.loadFromFile(
             truckPath.string()
         );
+    supplierTextureLoaded_ = supplierTexture_.loadFromFile(
+        assetsPath_ / "textures" / "supplier.png"
+    );
+
+    supplierTruckTextureLoaded_ = supplierTruckTexture_.loadFromFile(
+        assetsPath_ / "textures" / "supplier_truck.png"
+    );
+
+    if (supplierTextureLoaded_) {
+        supplierTexture_.setSmooth(true);
+    }
+
+    if (supplierTruckTextureLoaded_) {
+        supplierTruckTexture_.setSmooth(true);
+    }
 }
 
 void SimulationScreen::setBackend(
@@ -2649,57 +2566,39 @@ void SimulationScreen::refreshSupplierData()
 {
     supplierRequests_.clear();
 
-    if (
-        backend_ == nullptr ||
-        !backend_->isReady()
-    )
-    {
+    if (backend_ == nullptr || !backend_->isReady()) {
         return;
     }
 
-    supplierRequests_ =
-        backend_->getSupplierRequests();
+    supplierRequests_ = backend_->getSupplierRequests();
 
-    if (supplierTruck_.active)
-    {
+    if (supplierTruck_.active) {
         return;
     }
 
-    for (
-        const SupplierRequestInfo& request :
-        supplierRequests_
-    )
-    {
-        if (
-            request.status != "Created" &&
-            request.status != "InTransit"
-        )
-        {
+    for (const SupplierRequestInfo& request : supplierRequests_) {
+        if (request.status != "Delivered") {
             continue;
         }
 
-        if (
-            request.deliveryDay >
-            currentDay_
-        )
-        {
+        const bool alreadyAnimated =
+            std::find(
+                animatedSupplierRequestIds_.begin(),
+                animatedSupplierRequestIds_.end(),
+                request.id
+            ) != animatedSupplierRequestIds_.end();
+
+        if (alreadyAnimated) {
             continue;
         }
 
-        activeSupplierRequestId_ =
-            request.id;
+        animatedSupplierRequestIds_.push_back(request.id);
 
-        supplierTruck_.active =
-            true;
-
-        supplierTruck_.returning =
-            false;
-
-        supplierTruck_.progress =
-            0.0f;
-
-        supplierTruck_.position =
-            supplierCenter_;
+        activeSupplierRequestId_ = request.id;
+        supplierTruck_.active = true;
+        supplierTruck_.returning = false;
+        supplierTruck_.progress = 0.0f;
+        supplierTruck_.position = supplierCenter_;
 
         break;
     }
@@ -2713,6 +2612,7 @@ void SimulationScreen::configure(
 
     currentDay_ = 1;
     dayTimer_ = 0.0f;
+    animatedSupplierRequestIds_.clear();
 
     simulationSpeed_ = 1.0f;
     supplierTruck_.position =
@@ -2752,6 +2652,7 @@ void SimulationScreen::advanceDay()
         backend_->isReady()
     )
     {
+        backend_->processSupplierDeliveries(currentDay_);
         backend_->processStoreDeliveries(
             currentDay_
         );

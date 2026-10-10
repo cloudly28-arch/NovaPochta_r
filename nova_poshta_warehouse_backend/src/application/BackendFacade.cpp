@@ -920,3 +920,28 @@ bool BackendFacade::startExperiment(
 
     return true;
 }
+
+void BackendFacade::processSupplierDeliveries(int currentDay)
+{
+    if (!ready_ || currentDay <= 0) {
+        return;
+    }
+
+    const std::vector<SupplierRequestInfo> requests =
+        getSupplierRequests();
+
+    for (const SupplierRequestInfo& request : requests) {
+        const bool pending =
+            request.status == "Created" ||
+            request.status == "InTransit";
+
+        if (pending && request.deliveryDay <= currentDay) {
+            if (!completeSupplierRequest(request.id)) {
+                lastError_ = "Cannot complete supplier request #" +
+                             std::to_string(request.id);
+
+                std::cerr << lastError_ << '\n';
+            }
+        }
+    }
+}
