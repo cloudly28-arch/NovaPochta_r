@@ -1790,3 +1790,107 @@ bool Database::isOrderStockValid(int orderId, int currentDay) const {
     sqlite3_finalize(stmt);
     return valid;
 }
+
+
+bool Database::getExperimentReport(int warehouseId, ExperimentReport& report) const {
+    report = ExperimentReport{};
+    if (db_ == nullptr) {
+        return false;
+    }
+
+    // Aggregate each ledger separately to avoid multiplying rows in joins.
+    const char* sql = R"SQL(
+        WITH shipped AS (
+            SELECT b.product_id,
+                   SUM(a.quantity) AS units,
+                   SUM(a.quantity * a.actual_unit_price_cents) AS revenue,
+                   SUM(a.quantity * (a.base_unit_price_cents -
+                                     a.actual_unit_price_cents)) AS discount_loss
+            FROM warehouse_allocations a
+            JOIN warehouse_batches b ON b.id = a.batch_id
+            JOIN orders o ON o.id = a.order_id AND o.status = 'Completed'
+            WHERE b.warehouse_id = ?1
+            GROUP BY b.product_id
+        ), pending AS (
+            SELECT b.product_id, SUM(a.quantity) AS units
+            FROM warehouse_allocations a
+            JOIN warehouse_batches b ON b.id = a.batch_id
+            JOIN orders o ON o.id = a.order_id AND o.status <> 'Completed'
+            WHERE b.warehouse_id = ?1
+            GROUP BY b.product_id
+        ), losses AS (
+            SELECT product_id, SUM(quantity) AS units, SUM(loss_cents) AS loss
+            FROM warehouse_writeoffs WHERE warehouse_id = ?1
+            GROUP BY product_id
+        ), stock AS (
+            SELECT product_id, SUM(quantity) AS units
+            FROM warehouse_inventory WHERE warehouse_id = ?1
+            GROUP BY product_id
+        ), shops AS (
+            SELECT product_id, SUM(quantity) AS units
+            FROM store_inventory GROUP BY product_id
+        ), supplied AS (
+            SELECT product_id, SUM(requested_quantity) AS units
+            FROM supplier_requests WHERE status = 'Delivered'
+            GROUP BY product_id
+        )
+        SELECT p.id, p.name, p.units_per_package,
+               COALESCE(stock.units, 0), COALESCE(shops.units, 0),
+               COALESCE(pending.units, 0), COALESCE(shipped.units, 0),
+               COALESCE(shipped.revenue, 0), COALESCE(shipped.discount_loss, 0),
+               COALESCE(losses.units, 0), COALESCE(losses.loss, 0),
+               COALESCE(supplied.units, 0),
+               (SELECT COUNT(*) FROM orders WHERE status = 'Completed'),
+               (SELECT COUNT(*) FROM orders WHERE status <> 'Completed')
+        FROM products p
+        LEFT JOIN stock ON stock.product_id = p.id
+        LEFT JOIN shops ON shops.product_id = p.id
+        LEFT JOIN pending ON pending.product_id = p.id
+        LEFT JOIN shipped ON shipped.product_id = p.id
+        LEFT JOIN losses ON losses.product_id = p.id
+        LEFT JOIN supplied ON supplied.product_id = p.id
+        ORDER BY p.id;
+    )SQL";
+    sqlite3_stmt* statement = nullptr;
+    if (sqlite3_prepare_v2(db_, sql, -1, &statement, nullptr) != SQLITE_OK) {
+        sqlite3_finalize(statement);
+        return false;
+    }
+    if (sqlite3_bind_int(statement, 1, warehouseId) != SQLITE_OK) {
+        sqlite3_finalize(statement);
+        return false;
+    }
+    ExperimentReport result;
+    int status = SQLITE_OK;
+    while ((status = sqlite3_step(statement)) == SQLITE_ROW) {
+        ExperimentProductResult item;
+        item.productId = sqlite3_column_int(statement, 0);
+        const unsigned char* name = sqlite3_column_text(statement, 1);
+        item.productName = name ? reinterpret_cast<const char*>(name) : "";
+        item.unitsPerPackage = sqlite3_column_int(statement, 2);
+        item.warehouseUnits = sqlite3_column_int64(statement, 3);
+        item.storeUnits = sqlite3_column_int64(statement, 4);
+        item.pendingUnits = sqlite3_column_int64(statement, 5);
+        item.deliveredUnits = sqlite3_column_int64(statement, 6);
+        item.revenueCents = sqlite3_column_int64(statement, 7);
+        item.discountLossCents = sqlite3_column_int64(statement, 8);
+        item.writtenOffUnits = sqlite3_column_int64(statement, 9);
+        item.writeoffLossCents = sqlite3_column_int64(statement, 10);
+        item.suppliedUnits = sqlite3_column_int64(statement, 11);
+        result.completedOrders = sqlite3_column_int64(statement, 12);
+        result.pendingOrders = sqlite3_column_int64(statement, 13);
+        result.deliveredUnits += item.deliveredUnits;
+        result.revenueCents += item.revenueCents;
+        result.discountLossCents += item.discountLossCents;
+        result.writtenOffUnits += item.writtenOffUnits;
+        result.writeoffLossCents += item.writeoffLossCents;
+        result.suppliedUnits += item.suppliedUnits;
+        result.products.push_back(std::move(item));
+    }
+    const int finalized = sqlite3_finalize(statement);
+    if (status != SQLITE_DONE || finalized != SQLITE_OK) {
+        return false;
+    }
+    report = std::move(result);
+    return true;
+}

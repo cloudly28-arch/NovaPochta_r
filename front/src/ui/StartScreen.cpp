@@ -47,7 +47,7 @@ bool StartScreen::draw(SimulationSettings& settings)
         "Days",
         &settings.days,
         10,
-        30
+        100
     );
 
     ImGui::Spacing();

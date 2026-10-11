@@ -160,6 +160,11 @@ private:
     ) const;
 
     void advanceDay();
+    void drawFinalReport();
+    void loadFinalReport();
+    ExperimentReport finalReport_;
+    bool finalReportVisible_ = false;
+    bool finalReportLoaded_ = false;
 
 private:
     std::vector<StoreView> stores_;
@@ -266,3 +271,4 @@ private:
 
     void drawSupplierApprovals();
 };
+

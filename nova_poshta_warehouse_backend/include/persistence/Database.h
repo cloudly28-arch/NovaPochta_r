@@ -85,6 +85,33 @@ struct WarehouseAllocationStats {
     long long allocatedValueCents{};
     long long discountLossCents{};
 };
+struct ExperimentProductResult {
+    int productId{};
+    std::string productName;
+    int unitsPerPackage{1};
+    long long warehouseUnits{};
+    long long storeUnits{};
+    long long pendingUnits{};
+    long long deliveredUnits{};
+    long long revenueCents{};
+    long long discountLossCents{};
+    long long writtenOffUnits{};
+    long long writeoffLossCents{};
+    long long suppliedUnits{};
+};
+
+struct ExperimentReport {
+    std::vector<ExperimentProductResult> products;
+    long long deliveredUnits{};
+    long long revenueCents{};
+    long long discountLossCents{};
+    long long writtenOffUnits{};
+    long long writeoffLossCents{};
+    long long suppliedUnits{};
+    long long completedOrders{};
+    long long pendingOrders{};
+};
+
 class Database {
 private:
     struct sqlite3* db_{nullptr};
@@ -95,6 +122,8 @@ public:
 
     Database(const Database&) = delete;
     Database& operator=(const Database&) = delete;
+
+    bool getExperimentReport(int warehouseId, ExperimentReport& report) const;
 
     bool open(const std::string& path);
     void close();
@@ -212,4 +241,5 @@ public:
         int deliveryDay
     );
 };
+
 

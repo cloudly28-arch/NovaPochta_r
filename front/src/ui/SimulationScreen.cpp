@@ -82,6 +82,7 @@ void SimulationScreen::draw(
     drawTopBar(settings);
     drawBottomBar();
     drawInfoPanel();
+    drawFinalReport();
 }
 
 void SimulationScreen::ensureStoresCreated(
@@ -339,6 +340,9 @@ void SimulationScreen::drawBottomBar()
                 currentDay_ = 1;
                 dayTimer_ = 0.0f;
                 firstDayProcessed_ = false;
+    finalReport_ = ExperimentReport{};
+    finalReportVisible_ = false;
+    finalReportLoaded_ = false;
 
                 batchDiscountPercent_ = 20;
                 batchDiscountFailed_ = false;
@@ -419,6 +423,9 @@ void SimulationScreen::drawBottomBar()
             currentDay_ = 1;
             dayTimer_ = 0.0f;
             firstDayProcessed_ = false;
+    finalReport_ = ExperimentReport{};
+    finalReportVisible_ = false;
+    finalReportLoaded_ = false;
             animatedSupplierRequestIds_.clear();
 
             supplierTruck_.active = false;
@@ -466,7 +473,14 @@ void SimulationScreen::drawBottomBar()
 
         ImGui::EndPopup();
     }
-    ImGui::SameLine(400.0f);
+    if (simulationState_ == SimulationState::Finished) {
+        ImGui::SameLine();
+        if (ImGui::Button("Итоговый отчёт")) {
+            loadFinalReport();
+            finalReportVisible_ = true;
+        }
+    }
+    ImGui::SameLine();
 
     ImGui::Text("Speed:");
 
@@ -2688,6 +2702,9 @@ void SimulationScreen::configure(
     currentDay_ = 1;
     dayTimer_ = 0.0f;
     firstDayProcessed_ = false;
+    finalReport_ = ExperimentReport{};
+    finalReportVisible_ = false;
+    finalReportLoaded_ = false;
     animatedSupplierRequestIds_.clear();
 
     simulationSpeed_ = 1.0f;
@@ -2711,6 +2728,8 @@ void SimulationScreen::advanceDay() {
     if (currentDay_ >= totalDays_) {
         simulationState_ = SimulationState::Finished;
         dayTimer_ = 0.0f;
+        loadFinalReport();
+        finalReportVisible_ = true;
         return;
     }
 
@@ -3025,4 +3044,93 @@ void SimulationScreen::drawSupplierApprovals() {
             "Заявок, ожидающих подтверждения, нет."
         );
     }
+}
+
+void SimulationScreen::loadFinalReport() {
+    finalReportLoaded_ = backend_ != nullptr &&
+        backend_->getExperimentReport(finalReport_);
+}
+
+void SimulationScreen::drawFinalReport() {
+    if (!finalReportVisible_) {
+        return;
+    }
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(
+        ImVec2(viewport->WorkPos.x + viewport->WorkSize.x * 0.5f,
+               viewport->WorkPos.y + viewport->WorkSize.y * 0.5f),
+        ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(
+        ImVec2(viewport->WorkSize.x * 0.94f, viewport->WorkSize.y * 0.86f),
+        ImGuiCond_Appearing);
+    if (!ImGui::Begin("Итоговый отчёт за период", &finalReportVisible_)) {
+        ImGui::End();
+        return;
+    }
+    ImGui::Text("Моделирование завершено: %d дней", totalDays_);
+    if (!finalReportLoaded_) {
+        ImGui::TextWrapped("Не удалось получить итоговые данные из базы.");
+        if (ImGui::Button("Повторить загрузку")) {
+            loadFinalReport();
+        }
+        ImGui::End();
+        return;
+    }
+    ImGui::Text("Завершённые заказы: %lld | Незавершённые: %lld",
+        finalReport_.completedOrders, finalReport_.pendingOrders);
+    ImGui::Text("Доставлено в магазины: %lld шт. | Получено от поставщика: %lld шт.",
+        finalReport_.deliveredUnits, finalReport_.suppliedUnits);
+    ImGui::Text("Выручка по завершённым доставкам: %.2f руб.",
+        finalReport_.revenueCents / 100.0);
+    ImGui::Text("Снижение выручки из-за уценки: %.2f руб.",
+        finalReport_.discountLossCents / 100.0);
+    ImGui::Text("Списано: %lld шт. | Потери от списаний: %.2f руб.",
+        finalReport_.writtenOffUnits, finalReport_.writeoffLossCents / 100.0);
+    ImGui::Text("Выручка за вычетом списаний: %.2f руб.",
+        (finalReport_.revenueCents - finalReport_.writeoffLossCents) / 100.0);
+    ImGui::TextWrapped(
+        "Прибыль не рассчитана: закупочная стоимость и расходы не заданы. "
+        "Уценка уже учтена в выручке и повторно не вычитается. "
+        "Выручка отражает стоимость доставки со склада, а не продажи магазинов покупателям.");
+    ImGui::Separator();
+    ImGui::TextWrapped(
+        "Остатки склада показаны без резервов. Резерв относится к незавершённым "
+        "заказам и не включён в доставку и выручку. Количества указаны в штуках.");
+    const ImGuiTableFlags flags = ImGuiTableFlags_Borders |
+        ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable |
+        ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY |
+        ImGuiTableFlags_SizingFixedFit;
+    if (ImGui::BeginTable("FinalProductResults", 11, flags,
+            ImVec2(0.0f, ImGui::GetContentRegionAvail().y), 1590.0f)) {
+        ImGui::TableSetupColumn("Товар", ImGuiTableColumnFlags_WidthFixed, 200.0f);
+        const char* headers[] = {
+            "На складе, шт.", "В магазинах, шт.", "В резерве, шт.",
+            "Доставлено, шт.", "Доставлено, уп.", "Выручка, руб.",
+            "Уценка, руб.", "Списано, шт.", "Списания, руб.", "Поставлено, шт."
+        };
+        for (const char* header : headers) {
+            ImGui::TableSetupColumn(header, ImGuiTableColumnFlags_WidthFixed, 135.0f);
+        }
+        ImGui::TableSetupScrollFreeze(1, 1);
+        ImGui::TableHeadersRow();
+        for (const ExperimentProductResult& item : finalReport_.products) {
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TextUnformatted(item.productName.c_str());
+            ImGui::TableSetColumnIndex(1); ImGui::Text("%lld", item.warehouseUnits);
+            ImGui::TableSetColumnIndex(2); ImGui::Text("%lld", item.storeUnits);
+            ImGui::TableSetColumnIndex(3); ImGui::Text("%lld", item.pendingUnits);
+            ImGui::TableSetColumnIndex(4); ImGui::Text("%lld", item.deliveredUnits);
+            const int pack = item.unitsPerPackage > 0 ? item.unitsPerPackage : 1;
+            ImGui::TableSetColumnIndex(5);
+            ImGui::Text("%lld + %lld шт.", item.deliveredUnits / pack, item.deliveredUnits % pack);
+            ImGui::TableSetColumnIndex(6); ImGui::Text("%.2f", item.revenueCents / 100.0);
+            ImGui::TableSetColumnIndex(7); ImGui::Text("%.2f", item.discountLossCents / 100.0);
+            ImGui::TableSetColumnIndex(8); ImGui::Text("%lld", item.writtenOffUnits);
+            ImGui::TableSetColumnIndex(9); ImGui::Text("%.2f", item.writeoffLossCents / 100.0);
+            ImGui::TableSetColumnIndex(10); ImGui::Text("%lld", item.suppliedUnits);
+        }
+        ImGui::EndTable();
+    }
+    ImGui::End();
 }

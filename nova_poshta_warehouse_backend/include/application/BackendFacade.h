@@ -74,6 +74,7 @@ public:
         const std::string& schemaPath
     );
     bool isReady() const;
+    bool getExperimentReport(ExperimentReport& report) const;
 
     std::vector<StoreInfo> getStores() const;
     std::string getStoreName(int storeId) const;
@@ -149,3 +150,4 @@ private:
     int storeCount_ = 9;
     int productCount_ = 20;
 };
+
