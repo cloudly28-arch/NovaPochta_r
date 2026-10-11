@@ -1334,11 +1334,15 @@ bool Database::changeWarehouseQuantity(
     int warehouseId,
     int productId,
     int delta,
-    int currentDay
+    int currentDay,
+    int deliveryDay,
+    int orderId
 ) {
     if (db_ == nullptr || currentDay < 1) {
         return false;
     }
+
+    const int requiredDay = deliveryDay > currentDay ? deliveryDay : currentDay;
 
     if (delta >= 0) {
         return changeWarehouseQuantityRaw(
@@ -1366,7 +1370,7 @@ bool Database::changeWarehouseQuantity(
 
     for (const WarehouseBatchRow& batch : batches) {
         if (batch.productId == productId &&
-            batch.expiresDay > currentDay) {
+            batch.expiresDay > requiredDay) {
             available += batch.quantity;
         }
     }
@@ -1383,7 +1387,7 @@ bool Database::changeWarehouseQuantity(
         }
 
         if (batch.productId != productId ||
-            batch.expiresDay <= currentDay) {
+            batch.expiresDay <= requiredDay) {
             continue;
         }
 
@@ -1408,11 +1412,12 @@ bool Database::changeWarehouseQuantity(
 
         const std::string allocationSql =
             "INSERT INTO warehouse_allocations ("
-            "batch_id, allocation_day, quantity, "
+            "batch_id, order_id, allocation_day, quantity, "
             "base_unit_price_cents, actual_unit_price_cents, "
             "discount_percent"
             ") VALUES (" +
             std::to_string(batch.id) + "," +
+            (orderId > 0 ? std::to_string(orderId) : "NULL") + "," +
             std::to_string(currentDay) + "," +
             std::to_string(taken) + "," +
             std::to_string(batch.unitPriceCents) + "," +
@@ -1760,4 +1765,28 @@ bool Database::createStoreOrder(
     }
 
     return true;
+}
+
+
+bool Database::isOrderStockValid(int orderId, int currentDay) const {
+    if (!db_ || orderId <= 0 || currentDay <= 0) return false;
+    const char* sql =
+        "SELECT EXISTS (SELECT 1 FROM order_items WHERE order_id=?1 AND allocated_quantity>0) "
+        "AND NOT EXISTS (SELECT 1 FROM warehouse_allocations a "
+        "JOIN warehouse_batches b ON b.id=a.batch_id "
+        "WHERE a.order_id=?1 AND b.expires_day<=?2) "
+        "AND NOT EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id=?1 "
+        "AND oi.allocated_quantity<>COALESCE((SELECT SUM(a.quantity) "
+        "FROM warehouse_allocations a JOIN warehouse_batches b ON b.id=a.batch_id "
+        "WHERE a.order_id=oi.order_id AND b.product_id=oi.product_id),0));";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        sqlite3_finalize(stmt);
+        return false;
+    }
+    const bool bound = sqlite3_bind_int(stmt, 1, orderId) == SQLITE_OK &&
+                       sqlite3_bind_int(stmt, 2, currentDay) == SQLITE_OK;
+    const bool valid = bound && sqlite3_step(stmt) == SQLITE_ROW && sqlite3_column_int(stmt, 0) == 1;
+    sqlite3_finalize(stmt);
+    return valid;
 }

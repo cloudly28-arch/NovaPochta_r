@@ -338,6 +338,7 @@ CREATE TABLE warehouse_writeoffs (
 CREATE TABLE warehouse_allocations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     batch_id INTEGER NOT NULL,
+    order_id INTEGER,
     allocation_day INTEGER NOT NULL CHECK (allocation_day >= 1),
     quantity INTEGER NOT NULL CHECK (quantity > 0),
     base_unit_price_cents INTEGER NOT NULL
@@ -348,7 +349,9 @@ CREATE TABLE warehouse_allocations (
         CHECK (discount_percent BETWEEN 0 AND 90),
 
     FOREIGN KEY (batch_id)
-        REFERENCES warehouse_batches(id) ON DELETE CASCADE
+        REFERENCES warehouse_batches(id) ON DELETE CASCADE,
+    FOREIGN KEY (order_id)
+        REFERENCES orders(id) ON DELETE CASCADE
 );
 ALTER TABLE products
     ADD COLUMN units_per_package INTEGER NOT NULL DEFAULT 10
@@ -379,3 +382,4 @@ SET units_per_package = CASE id
     ELSE 10
 END;
 COMMIT;
+

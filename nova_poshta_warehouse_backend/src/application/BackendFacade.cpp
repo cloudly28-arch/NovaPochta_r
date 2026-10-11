@@ -510,6 +510,13 @@ void BackendFacade::processStoreDeliveries(int currentDay) {
             continue;
         }
 
+        if (!database_.isOrderStockValid(order.id, currentDay)) {
+            lastError_ = "Delivery blocked: expired or inconsistent reservation, order #" +
+                         std::to_string(order.id);
+            std::cerr << lastError_ << '\n';
+            continue;
+        }
+
         bool hasAllocatedGoods = false;
 
         for (const OrderItemRow& item : order.items) {
@@ -782,10 +789,25 @@ void BackendFacade::processStoreOrders(
 
 
 
-            const int available =
-                warehouseProduct->quantity;
+            const int plannedDeliveryDay = std::max(currentDay + 1, order.deliveryDay);
+            std::vector<WarehouseBatchRow> dispatchBatches;
+            if (!database_.getWarehouseBatches(warehouse_.getId(), dispatchBatches)) {
+                lastError_ = "Cannot check batches for delivery";
+                return;
+            }
+            long long validQuantity = 0;
+            for (const WarehouseBatchRow& batch : dispatchBatches) {
+                if (batch.productId == item.productId && batch.expiresDay > plannedDeliveryDay)
+                    validQuantity += batch.quantity;
+            }
+            const int available = static_cast<int>(std::min(
+                validQuantity, static_cast<long long>(warehouseProduct->quantity)));
 
             const int packageSize = warehouseProduct->unitsPerPackage;
+            if (packageSize <= 0) {
+                lastError_ = "Invalid package size";
+                return;
+            }
 
 
 
@@ -826,7 +848,9 @@ void BackendFacade::processStoreOrders(
                         warehouse_.getId(),
                         item.productId,
                         -allocatedNow,
-                        currentDay
+                        currentDay,
+                        plannedDeliveryDay,
+                        order.id
                     );
 
                 const bool orderChanged =
@@ -873,7 +897,7 @@ void BackendFacade::processStoreOrders(
             }
 
             const int quantityAfterAllocation =
-                available -
+                warehouseProduct->quantity -
                 allocatedNow;
 
             if (

@@ -130,8 +130,11 @@ public:
         int warehouseId,
         int productId,
         int delta,
-        int currentDay = 1
+        int currentDay = 1,
+        int deliveryDay = 0,
+        int orderId = 0
     );
+    bool isOrderStockValid(int orderId, int currentDay) const;
 
     bool changeWarehouseQuantityRaw(
         int warehouseId,
@@ -209,3 +212,4 @@ public:
         int deliveryDay
     );
 };
+
