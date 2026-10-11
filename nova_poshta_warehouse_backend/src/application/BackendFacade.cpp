@@ -323,8 +323,7 @@ bool BackendFacade::completeSupplierRequest(int requestId) {
             return true;
         }
 
-        if (request.status != "Created" &&
-            request.status != "InTransit") {
+        if (request.status != "InTransit"){
             lastError_ = "Supplier request cannot be delivered";
             return false;
         }
@@ -1041,31 +1040,26 @@ bool BackendFacade::startExperiment(
     return true;
 }
 
-void BackendFacade::processSupplierDeliveries(int currentDay)
-{
-    if (!ready_ || currentDay <= 0) {
+void BackendFacade::processSupplierDeliveries(int currentDay) {
+    if (!ready_ || currentDay < 1) {
         return;
     }
 
-    const std::vector<SupplierRequestInfo> requests =
-        getSupplierRequests();
+    const std::vector<SupplierRequestRow> requests =
+        database_.getSupplierRequests();
 
-    for (const SupplierRequestInfo& request : requests) {
-        const bool pending =
-            request.status == "Created" ||
-            request.status == "InTransit";
+    for (const SupplierRequestRow& request : requests) {
+        if (request.status != "InTransit" ||
+            request.deliveryDay > currentDay) {
+            continue;
+        }
 
-        if (pending && request.deliveryDay <= currentDay) {
-            if (!completeSupplierRequest(request.id)) {
-                lastError_ = "Cannot complete supplier request #" +
-                             std::to_string(request.id);
-
-                std::cerr << lastError_ << '\n';
-            }
+        if (!completeSupplierRequest(request.id)) {
+            std::cerr << getLastError() << '\n';
+            return;
         }
     }
 }
-
 bool BackendFacade::getWarehouseBatches(
     std::vector<WarehouseBatchRow>& batches
 ) const {
@@ -1151,4 +1145,67 @@ bool BackendFacade::getWarehouseAllocationStats(
         warehouse_.getId(),
         stats
     );
+}
+
+bool BackendFacade::approveSupplierRequest(
+    int requestId,
+    int currentDay
+) {
+    if (!ready_ || currentDay < 1) {
+        lastError_ = "Invalid supplier approval";
+        return false;
+    }
+
+    const std::vector<SupplierRequestRow> requests =
+        database_.getSupplierRequests();
+
+    for (const SupplierRequestRow& request : requests) {
+        if (request.id != requestId) {
+            continue;
+        }
+
+        if (request.status != "Created") {
+            lastError_ = "Request is not awaiting approval";
+            return false;
+        }
+
+        const int delay = std::clamp(
+            request.deliveryDay - request.createdDay,
+            1,
+            5
+        );
+
+        const int deliveryDay = currentDay + delay;
+
+        if (!database_.beginTransaction()) {
+            lastError_ = "Cannot begin supplier approval";
+            return false;
+        }
+
+        const std::string sql =
+            "UPDATE supplier_requests "
+            "SET delivery_day = " +
+            std::to_string(deliveryDay) +
+            ", status = 'InTransit' "
+            "WHERE id = " + std::to_string(requestId) +
+            " AND status = 'Created';";
+
+        if (!database_.executeSql(sql)) {
+            lastError_ = database_.getLastError();
+            database_.rollback();
+            return false;
+        }
+
+        if (!database_.commit()) {
+            lastError_ = database_.getLastError();
+            database_.rollback();
+            return false;
+        }
+
+        lastError_.clear();
+        return true;
+    }
+
+    lastError_ = "Supplier request not found";
+    return false;
 }

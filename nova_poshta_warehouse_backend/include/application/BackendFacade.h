@@ -136,6 +136,10 @@ public:
     bool getWarehouseAllocationStats(
         WarehouseAllocationStats& stats
     ) const;
+    bool approveSupplierRequest(
+        int requestId,
+        int currentDay
+    );
 private:
     Database database_;
     Warehouse warehouse_;

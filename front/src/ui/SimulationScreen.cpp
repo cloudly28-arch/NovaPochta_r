@@ -29,6 +29,13 @@ void SimulationScreen::update(
     {
         return;
     }
+    if (!firstDayProcessed_) {
+        if (!processCurrentDay()) {
+            return;
+        }
+
+        firstDayProcessed_ = true;
+    }
 
     updateVehicles(deltaTime);
     updateSupplierTruck(deltaTime);
@@ -312,50 +319,61 @@ void SimulationScreen::drawBottomBar()
         ImGuiWindowFlags_NoCollapse
     );
 
-    if (
-        ImGui::Button(
-            "START",
-            ImVec2(
-                100.0f,
-                40.0f
-            )
-        )
-    )
-    {
-        if (
-            simulationState_ ==
-            SimulationState::Finished
-        )
-        {
-            currentDay_ = 1;
-            dayTimer_ = 0.0f;
+ if (ImGui::Button("START", ImVec2(100.0f, 40.0f))) {
+        bool canStart = true;
 
-            for (
-                VehicleView& vehicle :
-                vehicles_
-            )
-            {
-                vehicle.progress =
-                    0.0f;
+        if (simulationState_ == SimulationState::Finished) {
+            const bool resetOk =
+                backend_ != nullptr &&
+                !databasePath_.empty() &&
+                !schemaPath_.empty() &&
+                backend_->resetDatabase(
+                    databasePath_.string(),
+                    schemaPath_.string()
+                );
 
-                vehicle.position =
-                    warehouseCenter_;
+            if (!resetOk) {
+                canStart = false;
+                ImGui::OpenPopup("Database error");
+            } else {
+                currentDay_ = 1;
+                dayTimer_ = 0.0f;
+                firstDayProcessed_ = false;
 
-                vehicle.direction =
-                    VehicleDirection::ToStore;
+                batchDiscountPercent_ = 20;
+                batchDiscountFailed_ = false;
 
-                vehicle.startDelay =
-                    static_cast<float>(
-                        vehicle.targetStoreId -
-                        1
-                    ) * 0.7f;
+                animatedSupplierRequestIds_.clear();
+                activeSupplierRequestId_ = -1;
+
+                supplierTruck_.active = false;
+                supplierTruck_.returning = false;
+                supplierTruck_.progress = 0.0f;
+                supplierTruck_.position = supplierCenter_;
+
+                for (VehicleView& vehicle : vehicles_) {
+                    vehicle.progress = 0.0f;
+                    vehicle.position = warehouseCenter_;
+                    vehicle.direction = VehicleDirection::ToStore;
+                    vehicle.startDelay =
+                        static_cast<float>(
+                            vehicle.targetStoreId - 1
+                        ) * 0.7f;
+                }
+
+                refreshWarehouseData();
+                refreshSupplierData();
+
+                if (selectedType_ == SelectedObjectType::Store) {
+                    refreshSelectedStoreData();
+                }
             }
         }
 
-        simulationState_ =
-            SimulationState::Running;
+        if (canStart) {
+            simulationState_ = SimulationState::Running;
+        }
     }
-
     ImGui::SameLine();
 
     if (
@@ -400,6 +418,7 @@ void SimulationScreen::drawBottomBar()
 
             currentDay_ = 1;
             dayTimer_ = 0.0f;
+            firstDayProcessed_ = false;
             animatedSupplierRequestIds_.clear();
 
             supplierTruck_.active = false;
@@ -1903,6 +1922,7 @@ void SimulationScreen::drawInfoPanel()
                     )
                 )
                 {
+                    drawSupplierApprovals();
                     int activeRequests = 0;
 
                     for (
@@ -2667,6 +2687,7 @@ void SimulationScreen::configure(
 
     currentDay_ = 1;
     dayTimer_ = 0.0f;
+    firstDayProcessed_ = false;
     animatedSupplierRequestIds_.clear();
 
     simulationSpeed_ = 1.0f;
@@ -2686,50 +2707,16 @@ void SimulationScreen::configure(
         SimulationState::Stopped;
 }
 
-void SimulationScreen::advanceDay()
-{
-    if (
-        currentDay_ >=
-        totalDays_
-    )
-    {
-        simulationState_ =
-            SimulationState::Finished;
-
+void SimulationScreen::advanceDay() {
+    if (currentDay_ >= totalDays_) {
+        simulationState_ = SimulationState::Finished;
         dayTimer_ = 0.0f;
-
         return;
     }
 
-    currentDay_++;
-    if (
-        backend_ != nullptr &&
-        backend_->isReady()
-    )
-    {
-        if (!backend_->writeOffExpiredBatches(currentDay_)) {
-            std::cerr << backend_->getLastError() << '\n';
-            return;
-        }
-        backend_->processSupplierDeliveries(currentDay_);
-        backend_->processStoreDeliveries(
-            currentDay_
-        );
-
-        backend_->simulateStoreSales(
-            currentDay_
-        );
-
-        backend_->processStoreOrders(
-            currentDay_
-        );
-
-        backend_->processSupplierRequests(
-            currentDay_
-        );
-    }
+    ++currentDay_;
+    processCurrentDay();
 }
-
 void SimulationScreen::drawWarehouseBatches() {
     ImGui::Separator();
     ImGui::TextUnformatted("Партии товаров");
@@ -2953,4 +2940,89 @@ void SimulationScreen::drawWarehouseAllocationStats() {
         "Показатели учитывают выделение товара заказам. "
         "Доставка в магазин может ещё не завершиться."
     );
+}
+
+bool SimulationScreen::processCurrentDay() {
+    if (backend_ == nullptr || !backend_->isReady()) {
+        simulationState_ = SimulationState::Paused;
+        std::cerr << "Database is not ready\n";
+        return false;
+    }
+
+    if (!backend_->writeOffExpiredBatches(currentDay_)) {
+        simulationState_ = SimulationState::Paused;
+        std::cerr << backend_->getLastError() << '\n';
+        return false;
+    }
+
+    backend_->processSupplierDeliveries(currentDay_);
+    backend_->processStoreDeliveries(currentDay_);
+    backend_->simulateStoreSales(currentDay_);
+    backend_->processStoreOrders(currentDay_);
+    backend_->processSupplierRequests(currentDay_);
+
+    refreshWarehouseData();
+    refreshSupplierData();
+
+    if (selectedType_ == SelectedObjectType::Store) {
+        refreshSelectedStoreData();
+    }
+
+    return true;
+}
+
+void SimulationScreen::drawSupplierApprovals() {
+    ImGui::Separator();
+    ImGui::TextUnformatted("Подтверждение заявок поставщику");
+    ImGui::TextWrapped(
+        "Срок доставки отсчитывается от дня подтверждения."
+    );
+
+    if (supplierApprovalFailed_) {
+        ImGui::TextUnformatted(
+            "Не удалось подтвердить заявку."
+        );
+    }
+
+    bool hasPendingRequests = false;
+
+    for (const SupplierRequestInfo& request : supplierRequests_) {
+        if (request.status != "Created") {
+            continue;
+        }
+
+        hasPendingRequests = true;
+        ImGui::PushID(request.id);
+
+        ImGui::Text(
+            "Заявка №%d: %s — %d шт.",
+            request.id,
+            request.productName.c_str(),
+            request.requestedQuantity
+        );
+
+        if (ImGui::Button("Подтвердить")) {
+            const bool approved =
+                backend_ != nullptr &&
+                backend_->approveSupplierRequest(
+                    request.id,
+                    currentDay_
+                );
+
+            supplierApprovalFailed_ = !approved;
+
+            if (approved) {
+                dataRefreshTimer_ = 0.25f;
+            }
+        }
+
+        ImGui::PopID();
+        ImGui::Spacing();
+    }
+
+    if (!hasPendingRequests) {
+        ImGui::TextUnformatted(
+            "Заявок, ожидающих подтверждения, нет."
+        );
+    }
 }

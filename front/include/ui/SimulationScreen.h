@@ -257,4 +257,12 @@ private:
     bool warehouseAllocationStatsLoaded_ = false;
 
     void drawWarehouseAllocationStats();
+
+    bool firstDayProcessed_ = false;
+
+    bool processCurrentDay();
+
+    bool supplierApprovalFailed_ = false;
+
+    void drawSupplierApprovals();
 };
