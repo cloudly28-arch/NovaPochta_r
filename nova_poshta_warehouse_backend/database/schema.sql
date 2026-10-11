@@ -350,4 +350,32 @@ CREATE TABLE warehouse_allocations (
     FOREIGN KEY (batch_id)
         REFERENCES warehouse_batches(id) ON DELETE CASCADE
 );
+ALTER TABLE products
+    ADD COLUMN units_per_package INTEGER NOT NULL DEFAULT 10
+    CHECK (units_per_package > 0);
+
+UPDATE products
+SET units_per_package = CASE id
+    WHEN 1 THEN 12
+    WHEN 2 THEN 10
+    WHEN 3 THEN 10
+    WHEN 4 THEN 12
+    WHEN 5 THEN 10
+    WHEN 6 THEN 5
+    WHEN 7 THEN 10
+    WHEN 8 THEN 10
+    WHEN 9 THEN 12
+    WHEN 10 THEN 12
+    WHEN 11 THEN 6
+    WHEN 12 THEN 10
+    WHEN 13 THEN 10
+    WHEN 14 THEN 5
+    WHEN 15 THEN 10
+    WHEN 16 THEN 12
+    WHEN 17 THEN 12
+    WHEN 18 THEN 10
+    WHEN 19 THEN 10
+    WHEN 20 THEN 20
+    ELSE 10
+END;
 COMMIT;

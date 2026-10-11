@@ -245,7 +245,8 @@ BackendFacade::getWarehouseInventory() const
                 row.capacity,
                 row.minStock,
                 row.unitPriceCents,
-                row.shelfLifeDays
+                row.shelfLifeDays,
+                row.unitsPerPackage
             }
         );
     }
@@ -491,87 +492,80 @@ void BackendFacade::simulateStoreSales(int currentDay)
         std::cerr << lastError_ << '\n';
     }
 }
-void BackendFacade::processStoreDeliveries(
-    int currentDay
-)
-{
-    if (
-        !ready_ ||
-        currentDay <= 0
-    )
-    {
+void BackendFacade::processStoreDeliveries(int currentDay) {
+    if (!ready_ || currentDay <= 0) {
         return;
     }
 
-    const std::vector<StoreInfo> stores =
-        getStores();
+    const std::vector<StoreInfo> stores = getStores();
 
-    for (
-        const StoreInfo& store :
-        stores
-    )
-    {
+    for (const StoreInfo& store : stores) {
         StoreOrderRow order;
 
-        if (
-            !database_.getActiveStoreOrder(
-                store.id,
-                order
-            )
-        )
-        {
+        if (!database_.getActiveStoreOrder(store.id, order)) {
             continue;
         }
 
-        if (
-            order.status != "Allocated"
-        )
-        {
+        if (order.status != "Allocated" ||
+            order.deliveryDay > currentDay) {
             continue;
         }
 
-        if (
-            order.deliveryDay >
-            currentDay
-        )
-        {
+        bool hasAllocatedGoods = false;
+
+        for (const OrderItemRow& item : order.items) {
+            if (item.allocatedQuantity > 0) {
+                hasAllocatedGoods = true;
+                break;
+            }
+        }
+
+        if (!hasAllocatedGoods) {
             continue;
+        }
+
+        if (!database_.beginTransaction()) {
+            lastError_ = "Cannot begin store delivery";
+            return;
         }
 
         bool delivered = true;
 
-        for (
-            const OrderItemRow& item :
-            order.items
-        )
-        {
-            if (
-                item.allocatedQuantity <= 0
-            )
-            {
+        for (const OrderItemRow& item : order.items) {
+            if (item.allocatedQuantity <= 0) {
                 continue;
             }
 
-            if (
-                !database_.changeStoreQuantity(
+            if (!database_.changeStoreQuantity(
                     store.id,
                     item.productId,
                     item.allocatedQuantity
-                )
-            )
-            {
+                )) {
                 delivered = false;
                 break;
             }
         }
 
-        if (delivered)
-        {
-            database_.setOrderStatus(
+        if (delivered) {
+            delivered = database_.setOrderStatus(
                 order.id,
                 "Completed"
             );
         }
+
+        if (!delivered) {
+            lastError_ = "Cannot complete store delivery";
+            database_.rollback();
+            return;
+        }
+
+        if (!database_.commit()) {
+            lastError_ = "Cannot commit store delivery";
+            database_.rollback();
+            return;
+        }
+
+        lastError_.clear();
     }
 }
 void BackendFacade::processStoreOrders(
@@ -601,59 +595,130 @@ void BackendFacade::processStoreOrders(
     const std::vector<StoreInfo> stores =
         getStores();
 
-    for (
-        const StoreInfo& store :
-        stores
-    )
-    {
-        if (
-            database_.hasActiveStoreOrder(
-                store.id
-            )
-        )
-        {
+    for (const StoreInfo& store : stores) {
+        if (database_.hasActiveStoreOrder(store.id)) {
             continue;
         }
 
-        const std::vector<ProductStockInfo>
-            inventory =
-                getStoreInventory(
-                    store.id
-                );
+        const std::vector<ProductStockInfo> inventory =
+            getStoreInventory(store.id);
 
-        for (
-            const ProductStockInfo& product :
-            inventory
-        )
-        {
-            if (
-                product.quantity >
-                product.minStock
-            )
-            {
+        const std::vector<WarehouseStockRow> warehouseStock =
+            database_.getWarehouseInventory(warehouse_.getId());
+        std::vector<WarehouseBatchRow> batches;
+
+        if (!database_.getWarehouseBatches(
+                warehouse_.getId(),
+                batches
+            )) {
+            lastError_ = "Cannot load batches for order generation";
+            return;
+        }
+
+        std::vector<OrderItemRow> candidates;
+        std::vector<double> candidateWeights;
+
+        for (const ProductStockInfo& product : inventory) {
+            int discountPercent = 0;
+
+            for (const WarehouseBatchRow& batch : batches) {
+                if (batch.productId == product.productId &&
+                    batch.quantity > 0 &&
+                    batch.expiresDay > currentDay) {
+                    discountPercent = batch.discountPercent;
+                    break;
+                }
+            }
+
+            if (product.quantity > product.minStock &&
+                discountPercent == 0) {
                 continue;
             }
 
-            const int requestedQuantity =
-                product.capacity -
-                product.quantity;
+            int packageSize = 0;
 
-            if (
-                requestedQuantity <= 0
-            )
-            {
+            for (const WarehouseStockRow& stock : warehouseStock) {
+                if (stock.productId == product.productId) {
+                    packageSize = stock.unitsPerPackage;
+                    break;
+                }
+            }
+
+            if (packageSize <= 0) {
                 continue;
             }
 
-            database_.createStoreOrder(
-                store.id,
-                product.productId,
-                requestedQuantity,
-                currentDay,
-                currentDay + 1
+            const int freeSpace =
+                std::max(0, product.capacity - product.quantity);
+
+            const int maxPackages = freeSpace / packageSize;
+
+            if (maxPackages == 0) {
+                continue;
+            }
+
+            std::uniform_int_distribution<int> quantityDistribution(
+                1,
+                maxPackages
             );
 
-            break;
+            OrderItemRow item;
+            item.productId = product.productId;
+            item.productName = product.productName;
+            item.requestedQuantity =
+                quantityDistribution(generator) * packageSize;
+            item.allocatedQuantity = 0;
+
+            candidates.push_back(item);
+            const double weight = 1.0 + discountPercent / 20.0;
+            candidateWeights.push_back(weight);
+        }
+
+        if (candidates.empty()) {
+            continue;
+        }
+
+        const int maxItems = std::min(
+            3,
+            static_cast<int>(candidates.size())
+        );
+
+        std::uniform_int_distribution<int> itemCountDistribution(
+            1,
+            maxItems
+        );
+
+        const int itemCount = itemCountDistribution(generator);
+
+        std::vector<OrderItemRow> selectedItems;
+        selectedItems.reserve(itemCount);
+
+        for (int i = 0; i < itemCount; ++i) {
+            std::discrete_distribution<int> selectionDistribution(
+                candidateWeights.begin(),
+                candidateWeights.end()
+            );
+
+            const int selectedIndex = selectionDistribution(generator);
+
+            selectedItems.push_back(candidates[selectedIndex]);
+
+            candidates.erase(candidates.begin() + selectedIndex);
+            candidateWeights.erase(
+                candidateWeights.begin() + selectedIndex
+            );
+        }
+
+        if (!database_.createStoreOrder(
+                store.id,
+                selectedItems,
+                currentDay,
+                currentDay + 1
+            )) {
+            lastError_ =
+                "Cannot create store order: " +
+                database_.getLastError();
+            return;
         }
     }
 
@@ -673,8 +738,6 @@ void BackendFacade::processStoreOrders(
         {
             continue;
         }
-
-        bool completelyAllocated = true;
 
         for (
             const OrderItemRow& item :
@@ -718,45 +781,73 @@ void BackendFacade::processStoreOrders(
                 }
             }
 
-            if (
-                warehouseProduct ==
-                nullptr
-            )
-            {
-                completelyAllocated =
-                    false;
 
-                continue;
-            }
 
             const int available =
                 warehouseProduct->quantity;
 
-            const int allocatedNow =
+            const int packageSize = warehouseProduct->unitsPerPackage;
+
+
+
+            int storeFreeSpace = 0;
+
+            const std::vector<StoreStockRow> storeStock =
+                database_.getStoreInventory(store.id);
+
+            for (const StoreStockRow& stock : storeStock) {
+                if (stock.productId == item.productId) {
+                    storeFreeSpace = std::max(
+                        0,
+                        stock.capacity -
+                        stock.quantity -
+                        item.allocatedQuantity
+                    );
+                    break;
+                }
+            }
+
+            const int allocationLimit =
                 std::min(
                     remaining,
-                    available
+                    std::min(available, storeFreeSpace)
                 );
 
-            if (
-                allocatedNow > 0
-            )
-            {
-                if (
+            int allocatedNow =
+                (allocationLimit / packageSize) * packageSize;
+
+            if (allocatedNow > 0) {
+                if (!database_.beginTransaction()) {
+                    lastError_ = "Cannot begin order allocation";
+                    return;
+                }
+
+                const bool stockChanged =
                     database_.changeWarehouseQuantity(
                         warehouse_.getId(),
                         item.productId,
                         -allocatedNow,
                         currentDay
-                    )
-                )
-                {
+                    );
+
+                const bool orderChanged =
+                    stockChanged &&
                     database_.setOrderItemAllocated(
                         order.id,
                         item.productId,
-                        item.allocatedQuantity +
-                            allocatedNow
+                        item.allocatedQuantity + allocatedNow
                     );
+
+                if (!orderChanged) {
+                    lastError_ = "Cannot allocate packages to order";
+                    database_.rollback();
+                    return;
+                }
+
+                if (!database_.commit()) {
+                    lastError_ = "Cannot commit order allocation";
+                    database_.rollback();
+                    return;
                 }
             }
 
@@ -764,8 +855,6 @@ void BackendFacade::processStoreOrders(
                 remaining -
                 allocatedNow;
 
-            // Если склад не смог покрыть весь заказ,
-            // создаём заявку поставщику.
             if (
                 stillMissing > 0 &&
                 !database_.hasActiveSupplierRequest(
@@ -784,8 +873,6 @@ void BackendFacade::processStoreOrders(
                 );
             }
 
-            // Также пополняем склад, если после выдачи
-            // остаток упал до минимального уровня.
             const int quantityAfterAllocation =
                 available -
                 allocatedNow;
@@ -818,28 +905,31 @@ void BackendFacade::processStoreOrders(
                 }
             }
 
-            if (
-                stillMissing > 0
-            )
-            {
-                completelyAllocated =
-                    false;
+
+        }
+
+        StoreOrderRow updatedOrder;
+
+        if (!database_.getActiveStoreOrder(store.id, updatedOrder)) {
+            lastError_ = "Cannot reload store order";
+            return;
+        }
+
+        bool hasAllocatedGoods = false;
+
+        for (const OrderItemRow& item : updatedOrder.items) {
+            if (item.allocatedQuantity > 0) {
+                hasAllocatedGoods = true;
+                break;
             }
         }
 
-        if (completelyAllocated)
-        {
-            database_.setOrderStatus(
-                order.id,
-                "Allocated"
-            );
-        }
-        else
-        {
-            database_.setOrderStatus(
-                order.id,
-                "WaitingSupply"
-            );
+        const std::string nextStatus =
+            hasAllocatedGoods ? "Allocated" : "WaitingSupply";
+
+        if (!database_.setOrderStatus(order.id, nextStatus)) {
+            lastError_ = "Cannot update store order status";
+            return;
         }
     }
 }

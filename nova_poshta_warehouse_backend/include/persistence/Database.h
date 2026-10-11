@@ -24,6 +24,7 @@ struct WarehouseStockRow
     int minStock{};
     int unitPriceCents{};
     int shelfLifeDays{};
+    int unitsPerPackage{1};
 };
 
 struct SupplierRequestRow
@@ -201,4 +202,10 @@ public:
         int warehouseId,
         WarehouseAllocationStats& stats
     ) const;
+    bool createStoreOrder(
+        int storeId,
+        const std::vector<OrderItemRow>& items,
+        int createdDay,
+        int deliveryDay
+    );
 };

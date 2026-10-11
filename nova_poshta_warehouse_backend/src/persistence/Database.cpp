@@ -323,19 +323,14 @@ Database::getWarehouseInventory(
     }
 
     const char* sql =
-        "SELECT "
-        "wi.warehouse_id, "
-        "wi.product_id, "
-        "p.name, "
-        "wi.quantity, "
-        "wi.capacity, "
-        "wi.min_stock, "
-        "p.unit_price_cents, "
-        "p.shelf_life_days "
-        "FROM warehouse_inventory wi "
-        "JOIN products p ON p.id = wi.product_id "
-        "WHERE wi.warehouse_id=? "
-        "ORDER BY wi.product_id";
+        "SELECT wi.warehouse_id, wi.product_id, p.name, "
+        "wi.quantity, wi.capacity, wi.min_stock, "
+        "p.unit_price_cents, p.shelf_life_days, "
+        "p.units_per_package "
+        "FROM warehouse_inventory AS wi "
+        "JOIN products AS p ON p.id = wi.product_id "
+        "WHERE wi.warehouse_id = ? "
+        "ORDER BY wi.product_id;";
 
     sqlite3_stmt* stmt = nullptr;
 
@@ -364,18 +359,12 @@ Database::getWarehouseInventory(
     )
     {
         WarehouseStockRow row;
-
+        row.unitsPerPackage = sqlite3_column_int(stmt, 8);
         row.warehouseId =
-            sqlite3_column_int(
-                stmt,
-                0
-            );
+            sqlite3_column_int(stmt, 0);
 
         row.productId =
-            sqlite3_column_int(
-                stmt,
-                1
-            );
+            sqlite3_column_int(stmt,1);
 
         const auto* productName =
             sqlite3_column_text(
@@ -1699,5 +1688,76 @@ bool Database::getWarehouseAllocationStats(
     }
 
     stats = result;
+    return true;
+}
+
+bool Database::createStoreOrder(
+    int storeId,
+    const std::vector<OrderItemRow>& items,
+    int createdDay,
+    int deliveryDay
+) {
+    if (db_ == nullptr ||
+        storeId <= 0 ||
+        items.empty() ||
+        createdDay <= 0 ||
+        deliveryDay <= createdDay) {
+        return false;
+    }
+
+    for (const OrderItemRow& item : items) {
+        if (item.productId <= 0 || item.requestedQuantity <= 0) {
+            return false;
+        }
+    }
+
+    if (!executeSql("SAVEPOINT create_multi_order;")) {
+        return false;
+    }
+
+    const auto cancel = [this]() {
+        executeSql("ROLLBACK TO create_multi_order;");
+        executeSql("RELEASE create_multi_order;");
+        return false;
+    };
+
+    const std::string orderSql =
+        "INSERT INTO orders ("
+        "store_id, created_day, delivery_day, status"
+        ") SELECT " +
+        std::to_string(storeId) + "," +
+        std::to_string(createdDay) + "," +
+        std::to_string(deliveryDay) + ",'Created' "
+        "WHERE NOT EXISTS ("
+        "SELECT 1 FROM orders WHERE store_id = " +
+        std::to_string(storeId) +
+        " AND created_day = " +
+        std::to_string(createdDay) + ");";
+
+    if (!executeSql(orderSql) || sqlite3_changes(db_) != 1) {
+        return cancel();
+    }
+
+    const long long orderId = sqlite3_last_insert_rowid(db_);
+
+    for (const OrderItemRow& item : items) {
+        const std::string itemSql =
+            "INSERT INTO order_items ("
+            "order_id, product_id, requested_quantity, "
+            "allocated_quantity"
+            ") VALUES (" +
+            std::to_string(orderId) + "," +
+            std::to_string(item.productId) + "," +
+            std::to_string(item.requestedQuantity) + ",0);";
+
+        if (!executeSql(itemSql)) {
+            return cancel();
+        }
+    }
+
+    if (!executeSql("RELEASE create_multi_order;")) {
+        return cancel();
+    }
+
     return true;
 }

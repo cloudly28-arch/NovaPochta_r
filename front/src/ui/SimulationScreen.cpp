@@ -1734,46 +1734,57 @@ void SimulationScreen::drawInfoPanel()
                     )
                 )
                 {
-                    const ImGuiTableFlags flags =
-                        ImGuiTableFlags_Borders |
-                        ImGuiTableFlags_RowBg |
-                        ImGuiTableFlags_Resizable |
-                        ImGuiTableFlags_SizingStretchProp;
+
                     drawWarehouseBatches();
                     drawWarehouseWriteoffs();
                     drawWarehouseAllocationStats();
+                    const ImGuiTableFlags warehouseTableFlags =
+                        ImGuiTableFlags_Borders |
+                        ImGuiTableFlags_RowBg |
+                        ImGuiTableFlags_Resizable |
+                        ImGuiTableFlags_ScrollX |
+                        ImGuiTableFlags_ScrollY |
+                        ImGuiTableFlags_SizingFixedFit;
 
                     if (
                         ImGui::BeginTable(
                             "WarehouseInventoryTable",
-                            7,
-                            flags
+                            8,
+                            warehouseTableFlags,
+                            ImVec2(0.0f, 280.0f),
+                            1100.0f
                         )
                     )
                     {
                         ImGui::TableSetupColumn(
-                            "Product",
-                            ImGuiTableColumnFlags_None,
-                            2.2f
+                            "Товар", ImGuiTableColumnFlags_WidthFixed, 220.0f
                         );
-
                         ImGui::TableSetupColumn(
-                            "Qty"
+                            "Количество, шт.", ImGuiTableColumnFlags_WidthFixed, 120.0f
                         );
-
                         ImGui::TableSetupColumn(
-                            "Capacity"
+                            "Вместимость, шт.", ImGuiTableColumnFlags_WidthFixed, 130.0f
                         );
-
                         ImGui::TableSetupColumn(
-                            "Min"
+                            "Минимум, шт.", ImGuiTableColumnFlags_WidthFixed, 110.0f
                         );
-
                         ImGui::TableSetupColumn(
-                            "Status"
+                            "Статус", ImGuiTableColumnFlags_WidthFixed, 90.0f
                         );
-                        ImGui::TableSetupColumn("Цена, руб.");
-                        ImGui::TableSetupColumn("Срок хранения, дней");
+                        ImGui::TableSetupColumn(
+                            "Цена, руб.", ImGuiTableColumnFlags_WidthFixed, 110.0f
+                        );
+                        ImGui::TableSetupColumn(
+                            "Срок хранения, дней",
+                            ImGuiTableColumnFlags_WidthFixed,
+                            160.0f
+                        );
+                        ImGui::TableSetupColumn(
+                            "Остаток в упаковках",
+                            ImGuiTableColumnFlags_WidthFixed,
+                            180.0f
+                        );
+                        ImGui::TableSetupScrollFreeze(0, 1);
                         ImGui::TableHeadersRow();
 
                         for (
@@ -1844,8 +1855,28 @@ void SimulationScreen::drawInfoPanel()
                                     "OK"
                                 );
                             }
-                        }
+                        
+                            ImGui::TableSetColumnIndex(7);
 
+                            const int packageSize =
+                                item.unitsPerPackage > 0 ? item.unitsPerPackage : 1;
+
+                            const int fullPackages = item.quantity / packageSize;
+                            const int looseUnits = item.quantity % packageSize;
+
+                            ImGui::Text(
+                                "%d уп. + %d шт.",
+                                fullPackages,
+                                looseUnits
+                            );
+
+                            if (ImGui::IsItemHovered()) {
+                                ImGui::SetTooltip(
+                                    "В одной упаковке: %d шт.",
+                                    packageSize
+                                );
+                            }
+                        }   
                         ImGui::EndTable();
                     }
 

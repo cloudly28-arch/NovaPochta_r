@@ -29,6 +29,7 @@ struct WarehouseStockInfo
     int minStock{};
     int unitPriceCents{};
     int shelfLifeDays{};
+    int unitsPerPackage{1};
 };
 struct SupplierRequestInfo
 {
