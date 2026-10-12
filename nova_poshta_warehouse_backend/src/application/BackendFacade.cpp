@@ -6,6 +6,16 @@
 #include <sstream>
 #include <iostream>
 
+namespace {
+long long adjustedFoodStock(long long quantity, int shelfLifeDays) {
+    return shelfLifeDays <= 7 ? (quantity * 110 + 99) / 100 : quantity;
+}
+int stockCoverDays(int shelfLifeDays) {
+    if (shelfLifeDays <= 7) { return std::min(3, std::max(1, shelfLifeDays - 1)); }
+    return shelfLifeDays <= 30 ? 5 : 7;
+}
+}
+
 bool BackendFacade::initialize(const std::string& databasePath)
 {
     lastError_.clear();
@@ -90,6 +100,42 @@ bool BackendFacade::resetDatabase(
 
     if (!prepared.loadWarehouse(initialWarehouse)) {
         lastError_ = "Schema does not contain a valid warehouse";
+        return false;
+    }
+
+    // Keep a moderate reserve; a small surplus can still expire naturally.
+    const std::vector<WarehouseStockRow> initialStock =
+        prepared.getWarehouseInventory(initialWarehouse.getId());
+    std::string initialStockSql = "BEGIN TRANSACTION;";
+    std::mt19937 initialGenerator(static_cast<unsigned int>(storeCount_ * 7919 + productCount_ * 101));
+    std::uniform_int_distribution<int> surplusDistribution(5, 10);
+    for (const WarehouseStockRow& product : initialStock) {
+        long long dailyDemand = 0;
+        for (const Store& store : initialWarehouse.getStores()) {
+            for (const StoreStockRow& item : prepared.getStoreInventory(store.getId())) {
+                if (item.productId == product.productId) { dailyDemand += std::min(12, item.capacity); }
+            }
+        }
+        const long long pack = std::max(1, product.unitsPerPackage);
+        const int coverDays = stockCoverDays(product.shelfLifeDays);
+        const long long target = adjustedFoodStock(
+            (dailyDemand * coverDays * (100 + surplusDistribution(initialGenerator)) + 99) / 100, product.shelfLifeDays);
+        const long long quantity = std::min(((target + pack - 1) / pack) * pack,
+            (static_cast<long long>(product.capacity) / pack) * pack);
+        const long long minimum = std::min(quantity,
+            ((dailyDemand * std::min(3,coverDays) + pack - 1) / pack) * pack);
+        initialStockSql += "UPDATE warehouse_inventory SET quantity=" +
+            std::to_string(quantity) + ", min_stock=" + std::to_string(minimum) +
+            " WHERE warehouse_id=" + std::to_string(initialWarehouse.getId()) +
+            " AND product_id=" + std::to_string(product.productId) + ";";
+        initialStockSql += "UPDATE warehouse_batches SET quantity=" +
+            std::to_string(quantity) +
+            " WHERE warehouse_id=" + std::to_string(initialWarehouse.getId()) +
+            " AND product_id=" + std::to_string(product.productId) + ";";
+    }
+    initialStockSql += "COMMIT;";
+    if (!prepared.executeSql(initialStockSql)) {
+        lastError_ = "Cannot configure initial stock: " + prepared.getLastError();
         return false;
     }
 
@@ -306,7 +352,7 @@ bool BackendFacade::createSupplierRequest(
     );
 }
 
-bool BackendFacade::completeSupplierRequest(int requestId) {
+bool BackendFacade::completeSupplierRequest(int requestId, int receivedDay) {
     if (!ready_) {
         return false;
     }
@@ -346,7 +392,7 @@ bool BackendFacade::completeSupplierRequest(int requestId) {
                 warehouse_.getId(),
                 request.productId,
                 request.requestedQuantity,
-                request.deliveryDay
+                receivedDay > 0 ? receivedDay : request.deliveryDay
             );
 
         const bool statusUpdated =
@@ -434,24 +480,24 @@ bool BackendFacade::getActiveStoreOrder(
 
     return true;
 }
-void BackendFacade::simulateStoreSales(int currentDay)
+bool BackendFacade::simulateStoreSales(int currentDay, int intervalIndex)
 {
-    if (!ready_ || currentDay <= 0) {
-        return;
+    if (!ready_ || currentDay <= 0 || intervalIndex < 1 || intervalIndex > 8) {
+        return false;
     }
 
     if (!database_.beginTransaction()) {
         lastError_ = "Cannot start sales transaction: " +
                      database_.getLastError();
         std::cerr << lastError_ << '\n';
-        return;
+        return false;
     }
 
     std::mt19937 generator(
-        static_cast<unsigned int>(currentDay * 1009)
+        static_cast<unsigned int>(currentDay * 1009 + intervalIndex * 9176)
     );
 
-    std::uniform_int_distribution<int> salesDistribution(5, 15);
+    std::uniform_int_distribution<int> salesDistribution(1, 2);
 
     const std::vector<StoreInfo> stores = getStores();
 
@@ -478,7 +524,7 @@ void BackendFacade::simulateStoreSales(int currentDay)
 
                 database_.rollback();
                 std::cerr << lastError_ << '\n';
-                return;
+                return false;
             }
         }
     }
@@ -489,9 +535,12 @@ void BackendFacade::simulateStoreSales(int currentDay)
 
         database_.rollback();
         std::cerr << lastError_ << '\n';
+        return false;
     }
+    lastError_.clear();
+    return true;
 }
-void BackendFacade::processStoreDeliveries(int currentDay) {
+void BackendFacade::processStoreDeliveries(int currentDay, int onlyStoreId) {
     if (!ready_ || currentDay <= 0) {
         return;
     }
@@ -499,6 +548,7 @@ void BackendFacade::processStoreDeliveries(int currentDay) {
     const std::vector<StoreInfo> stores = getStores();
 
     for (const StoreInfo& store : stores) {
+        if (onlyStoreId != 0 && store.id != onlyStoreId) { continue; }
         StoreOrderRow order;
 
         if (!database_.getActiveStoreOrder(store.id, order)) {
@@ -658,16 +708,17 @@ void BackendFacade::processStoreOrders(
                 continue;
             }
 
-            std::uniform_int_distribution<int> quantityDistribution(
-                1,
-                maxPackages
-            );
-
+            std::uniform_int_distribution<int> orderVariation(-8, 8);
+            // Order half of this shop's capacity, with relative variation of +/-8%.
+            const long long requested = std::max(1LL,
+                (static_cast<long long>(product.capacity) * (100 + orderVariation(generator)) + 199) / 200);
+            const int packages = static_cast<int>(std::min(static_cast<long long>(maxPackages),
+                (requested + packageSize - 1) / packageSize));
+            if (packages == 0) { continue; }
             OrderItemRow item;
             item.productId = product.productId;
             item.productName = product.productName;
-            item.requestedQuantity =
-                quantityDistribution(generator) * packageSize;
+            item.requestedQuantity = packages * packageSize;
             item.allocatedQuantity = 0;
 
             candidates.push_back(item);
@@ -679,36 +730,8 @@ void BackendFacade::processStoreOrders(
             continue;
         }
 
-        const int maxItems = std::min(
-            3,
-            static_cast<int>(candidates.size())
-        );
-
-        std::uniform_int_distribution<int> itemCountDistribution(
-            1,
-            maxItems
-        );
-
-        const int itemCount = itemCountDistribution(generator);
-
-        std::vector<OrderItemRow> selectedItems;
-        selectedItems.reserve(itemCount);
-
-        for (int i = 0; i < itemCount; ++i) {
-            std::discrete_distribution<int> selectionDistribution(
-                candidateWeights.begin(),
-                candidateWeights.end()
-            );
-
-            const int selectedIndex = selectionDistribution(generator);
-
-            selectedItems.push_back(candidates[selectedIndex]);
-
-            candidates.erase(candidates.begin() + selectedIndex);
-            candidateWeights.erase(
-                candidateWeights.begin() + selectedIndex
-            );
-        }
+        // Include every depleted position, rather than randomly omitting some.
+        const std::vector<OrderItemRow> selectedItems = candidates;
 
         if (!database_.createStoreOrder(
                 store.id,
@@ -739,6 +762,9 @@ void BackendFacade::processStoreOrders(
         {
             continue;
         }
+
+        // A packed order must remain unchanged while its truck is travelling.
+        if (order.status == "Allocated") { continue; }
 
         for (
             const OrderItemRow& item :
@@ -784,7 +810,7 @@ void BackendFacade::processStoreOrders(
 
 
 
-            const int plannedDeliveryDay = std::max(currentDay + 1, order.deliveryDay);
+            const int plannedDeliveryDay = std::max(currentDay, order.deliveryDay);
             std::vector<WarehouseBatchRow> dispatchBatches;
             if (!database_.getWarehouseBatches(warehouse_.getId(), dispatchBatches)) {
                 lastError_ = "Cannot check batches for delivery";
@@ -901,83 +927,67 @@ void BackendFacade::processStoreOrders(
     }
 }
 
-void BackendFacade::processSupplierRequests(int currentDay)
-{
-    if (!ready_ || currentDay <= 0) {
-        return;
-    }
-
-    ExperimentReport stockReport;
-    if (!database_.getExperimentReport(warehouse_.getId(), stockReport)) {
-        lastError_ = "Cannot calculate replenishment demand";
-        return;
-    }
+void BackendFacade::processSupplierRequests(int currentDay) {
+    if (!ready_ || currentDay <= 0) { return; }
     const std::vector<StoreInfo> stores = getStores();
-    const std::vector<WarehouseStockRow> inventory =
-        database_.getWarehouseInventory(warehouse_.getId());
+    const std::vector<WarehouseStockRow> inventory = database_.getWarehouseInventory(warehouse_.getId());
+    const std::vector<SupplierRequestRow> pendingRequests = database_.getSupplierRequests();
     std::mt19937 generator(static_cast<unsigned int>(currentDay * 7919));
-    std::uniform_int_distribution<int> delayDistribution(1, 5);
-
+    std::uniform_int_distribution<int> delayDistribution(1, 5), bufferDistribution(5, 10);
     for (const WarehouseStockRow& product : inventory) {
-        // Created and InTransit requests both prevent a duplicate order.
-        if (database_.hasActiveSupplierRequest(product.productId)) {
-            continue;
-        }
-        long long dailyDemand = 0;
-        long long unmetOrders = 0;
-        for (const StoreInfo& store : stores) {
-            const std::vector<StoreStockRow> shopStock =
-                database_.getStoreInventory(store.id);
-            for (const StoreStockRow& item : shopStock) {
-                if (item.productId == product.productId) {
-                    // Expected sales for the existing uniform range 5..15.
-                    dailyDemand += std::min(10, item.capacity);
-                }
+        if (product.unitsPerPackage <= 0) { continue; }
+        const int delay = delayDistribution(generator);
+        long long alreadyOrdered = 0;
+        for (const SupplierRequestRow& request : pendingRequests) {
+            if (request.productId == product.productId &&
+                (request.status == "Created" || request.status == "InTransit")) {
+                alreadyOrdered += request.requestedQuantity;
             }
-            StoreOrderRow order;
-            if (database_.getActiveStoreOrder(store.id, order)) {
-                for (const OrderItemRow& item : order.items) {
-                    if (item.productId == product.productId) {
-                        unmetOrders += std::max(0,
-                            item.requestedQuantity - item.allocatedQuantity);
+        }
+        const int buffer = bufferDistribution(generator);
+        // Sum each store's shortage separately: one shop's excess cannot feed another shop.
+        long long totalShortage = 0, outstandingDemand = 0, dailyDemand = 0;
+        const int horizonTenths = std::min(delay * 10 + 9, std::max(1, product.shelfLifeDays - 1) * 10);
+        for (const StoreInfo& store : stores) {
+            const std::vector<StoreStockRow> stock = database_.getStoreInventory(store.id);
+            for (const StoreStockRow& item : stock) {
+                if (item.productId != product.productId) { continue; }
+                const int consumption = std::min(12, item.capacity);
+                dailyDemand += consumption;
+                long long allocated = 0;
+                StoreOrderRow order;
+                if (database_.getActiveStoreOrder(store.id, order)) {
+                    for (const OrderItemRow& orderItem : order.items) {
+                        if (orderItem.productId == product.productId) {
+                            allocated += orderItem.allocatedQuantity;
+                            outstandingDemand += std::max(0, orderItem.requestedQuantity - orderItem.allocatedQuantity);
+                        }
                     }
                 }
+                const long long target = std::min(static_cast<long long>(item.capacity),
+                    (static_cast<long long>(consumption) * horizonTenths * (100 + buffer) + 999) / 1000);
+                totalShortage += std::max(0LL, target - item.quantity - allocated);
             }
         }
-        if (dailyDemand <= 0 || product.unitsPerPackage <= 0) {
-            continue;
-        }
-        long long shopUnits = 0;
-        long long reservedUnits = 0;
-        for (const ExperimentProductResult& item : stockReport.products) {
-            if (item.productId == product.productId) {
-                shopUnits = item.storeUnits;
-                reservedUnits = item.pendingUnits;
-                break;
-            }
-        }
-        // Five days for the supplier plus one day for dispatch to shops.
-        // Do not buy more days of demand than the product can keep.
-        const int coverDays = std::min(6, std::max(1, product.shelfLifeDays - 1));
-        const long long target = (dailyDemand * coverDays * 105 + 99) / 100;
-        const long long available = product.quantity + shopUnits + reservedUnits;
-        const long long forecastNeed = std::max(0LL, target - available);
-        const long long orderNeed = std::max(0LL,
-            unmetOrders - static_cast<long long>(product.quantity));
-        const long long needed = std::max(forecastNeed, orderNeed);
-        const long long space = std::max(0, product.capacity - product.quantity);
-        const long long spoilageLimit = (dailyDemand *
-            std::max(1, product.shelfLifeDays - 1) * 105 + 99) / 100;
-        const long long limit = std::min(space, spoilageLimit);
+        const long long stockPosition = product.quantity + alreadyOrdered;
+        const int coverDays = stockCoverDays(product.shelfLifeDays);
+        const long long reserveTarget = adjustedFoodStock(
+            (dailyDemand * coverDays * (100 + buffer) + 99) / 100, product.shelfLifeDays);
+        const long long demand = std::max(totalShortage, outstandingDemand);
+        const long long trigger = dailyDemand * std::min(coverDays, delay + 1);
+        if (stockPosition >= trigger && stockPosition >= demand) { continue; }
+        const long long shelfLimit = adjustedFoodStock(
+            (dailyDemand * std::max(1,product.shelfLifeDays - 1) * (100 + buffer) + 99) / 100, product.shelfLifeDays);
+        const long long target = std::min(std::min(static_cast<long long>(product.capacity), shelfLimit),
+            std::max(reserveTarget, demand));
+        const long long needed = target - stockPosition;
+        if (needed <= 0) { continue; }
         const long long pack = product.unitsPerPackage;
+        const long long space = std::max(0LL, static_cast<long long>(product.capacity) - stockPosition);
         const long long rounded = ((needed + pack - 1) / pack) * pack;
-        const int quantity = static_cast<int>(std::min(rounded, (limit / pack) * pack));
-        if (quantity <= 0) {
-            continue;
-        }
-        if (!database_.createSupplierRequest(product.productId, quantity,
-                currentDay, currentDay + delayDistribution(generator))) {
-            lastError_ = "Cannot create demand-based supplier request";
+        const int quantity = static_cast<int>(std::min(rounded, (space / pack) * pack));
+        if (quantity > 0 && !database_.createSupplierRequest(product.productId, quantity, currentDay, currentDay + delay)) {
+            lastError_ = "Cannot order combined store shortages";
             return;
         }
     }
@@ -1060,6 +1070,20 @@ bool BackendFacade::writeOffExpiredBatches(int currentDay) {
         return false;
     }
 
+    std::vector<WarehouseBatchRow> batches;
+    if (!database_.getWarehouseBatches(warehouse_.getId(), batches)) {
+        lastError_ = "Cannot check batches for automatic discount";
+        return false;
+    }
+    for (const WarehouseBatchRow& batch : batches) {
+        const int remaining = batch.expiresDay - currentDay;
+        const int discount = remaining == 1 ? 30 : (remaining == 2 ? 15 : 0);
+        if (batch.quantity > 0 && discount > batch.discountPercent &&
+            !database_.setBatchDiscount(warehouse_.getId(), batch.id, discount, currentDay)) {
+            lastError_ = "Cannot apply automatic discount";
+            return false;
+        }
+    }
     lastError_.clear();
     return true;
 }
@@ -1186,4 +1210,17 @@ bool BackendFacade::approveSupplierRequest(
 bool BackendFacade::getExperimentReport(ExperimentReport& report) const {
     report = ExperimentReport{};
     return ready_ && database_.getExperimentReport(warehouse_.getId(), report);
+}
+
+
+bool BackendFacade::canDispatchStoreOrder(int storeId, int deliveryDay) const {
+    StoreOrderRow order;
+    return ready_ && database_.getActiveStoreOrder(storeId, order) &&
+        order.status == "Allocated" && order.deliveryDay <= deliveryDay &&
+        database_.isOrderStockValid(order.id, deliveryDay);
+}
+
+bool BackendFacade::getWarehouseSupplySummary(std::vector<WarehouseSupplySummary>& rows) const {
+    rows.clear();
+    return ready_ && database_.getWarehouseSupplySummary(warehouse_.getId(), rows);
 }

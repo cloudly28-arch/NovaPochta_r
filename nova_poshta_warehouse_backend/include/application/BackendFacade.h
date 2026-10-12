@@ -74,6 +74,8 @@ public:
         const std::string& schemaPath
     );
     bool isReady() const;
+    bool getWarehouseSupplySummary(std::vector<WarehouseSupplySummary>& rows) const;
+    bool canDispatchStoreOrder(int storeId, int deliveryDay) const;
     bool getExperimentReport(ExperimentReport& report) const;
 
     std::vector<StoreInfo> getStores() const;
@@ -93,20 +95,14 @@ public:
         int deliveryDay
     );
 
-    bool completeSupplierRequest(
-        int requestId
-    );
+    bool completeSupplierRequest(int requestId, int receivedDay = 0);
 
     bool getActiveStoreOrder(
     int storeId,
         StoreOrderInfo& order
     ) const;
-    void simulateStoreSales(
-        int currentDay
-    );
-    void processStoreDeliveries(
-        int currentDay
-    );
+    bool simulateStoreSales(int currentDay, int intervalIndex = 1);
+    void processStoreDeliveries(int currentDay, int onlyStoreId = 0);
     void processStoreOrders(
         int currentDay
     );

@@ -112,6 +112,15 @@ struct ExperimentReport {
     long long pendingOrders{};
 };
 
+struct WarehouseSupplySummary {
+    int productId{};
+    std::string productName;
+    long long warehouseUnits{};
+    long long storeNeed{};
+    long long orderedUnits{};
+    long long inTransitUnits{};
+    long long missingUnits{};
+};
 class Database {
 private:
     struct sqlite3* db_{nullptr};
@@ -122,6 +131,8 @@ public:
 
     Database(const Database&) = delete;
     Database& operator=(const Database&) = delete;
+
+    bool getWarehouseSupplySummary(int warehouseId, std::vector<WarehouseSupplySummary>& rows) const;
 
     bool getExperimentReport(int warehouseId, ExperimentReport& report) const;
 

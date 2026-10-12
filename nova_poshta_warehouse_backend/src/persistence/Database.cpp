@@ -409,81 +409,53 @@ Database::getWarehouseInventory(
     return result;
 }
 
-bool Database::createSupplierRequest(
-    int productId,
-    int requestedQuantity,
-    int createdDay,
-    int deliveryDay
-)
-{
-    if (
-        !db_ ||
-        productId <= 0 ||
-        requestedQuantity <= 0 ||
-        createdDay <= 0 ||
-        deliveryDay <= createdDay
-    )
-    {
+bool Database::createSupplierRequest(int productId, int requestedQuantity,
+    int createdDay, int deliveryDay) {
+    if (!db_ || productId <= 0 || requestedQuantity <= 0 ||
+        createdDay <= 0 || deliveryDay <= createdDay) { return false; }
+    if (!exec(db_, "SAVEPOINT merge_supplier_request;")) { return false; }
+    const auto cancel = [this]() {
+        exec(db_, "ROLLBACK TO merge_supplier_request;");
+        exec(db_, "RELEASE merge_supplier_request;");
         return false;
+    };
+    sqlite3_stmt* find = nullptr;
+    const char* findSql = "SELECT id FROM supplier_requests WHERE product_id=?1 "
+        "AND status='Created' ORDER BY created_day,id LIMIT 1;";
+    if (sqlite3_prepare_v2(db_, findSql, -1, &find, nullptr) != SQLITE_OK) {
+        sqlite3_finalize(find); return cancel();
     }
-
-    const char* sql =
-        "INSERT INTO supplier_requests "
-        "("
-        "product_id, "
-        "requested_quantity, "
-        "created_day, "
-        "delivery_day, "
-        "status"
-        ") "
-        "VALUES (?, ?, ?, ?, 'Created')";
-
-    sqlite3_stmt* stmt = nullptr;
-
-    if (
-        sqlite3_prepare_v2(
-            db_,
-            sql,
-            -1,
-            &stmt,
-            nullptr
-        ) != SQLITE_OK
-    )
-    {
-        return false;
+    if (sqlite3_bind_int(find, 1, productId) != SQLITE_OK) {
+        sqlite3_finalize(find); return cancel();
     }
-
-    sqlite3_bind_int(
-        stmt,
-        1,
-        productId
-    );
-
-    sqlite3_bind_int(
-        stmt,
-        2,
-        requestedQuantity
-    );
-
-    sqlite3_bind_int(
-        stmt,
-        3,
-        createdDay
-    );
-
-    sqlite3_bind_int(
-        stmt,
-        4,
-        deliveryDay
-    );
-
-    const bool ok =
-        sqlite3_step(stmt) ==
-        SQLITE_DONE;
-
-    sqlite3_finalize(stmt);
-
-    return ok;
+    const int state = sqlite3_step(find);
+    const int existingId = state == SQLITE_ROW ? sqlite3_column_int(find, 0) : 0;
+    const int finalized = sqlite3_finalize(find);
+    if ((state != SQLITE_ROW && state != SQLITE_DONE) || finalized != SQLITE_OK) { return cancel(); }
+    sqlite3_stmt* statement = nullptr;
+    const char* sql = existingId > 0
+        ? "UPDATE supplier_requests SET requested_quantity=requested_quantity+?1 "
+          "WHERE id=?2 AND status='Created' AND requested_quantity<=2147483647-?1;"
+        : "INSERT INTO supplier_requests(product_id,requested_quantity,created_day,delivery_day,status) "
+          "VALUES(?1,?2,?3,?4,'Created');";
+    if (sqlite3_prepare_v2(db_, sql, -1, &statement, nullptr) != SQLITE_OK) {
+        sqlite3_finalize(statement); return cancel();
+    }
+    int bound = SQLITE_OK;
+    if (existingId > 0) {
+        bound = sqlite3_bind_int(statement, 1, requestedQuantity);
+        if (bound == SQLITE_OK) { bound = sqlite3_bind_int(statement, 2, existingId); }
+    } else {
+        bound = sqlite3_bind_int(statement, 1, productId);
+        if (bound == SQLITE_OK) { bound = sqlite3_bind_int(statement, 2, requestedQuantity); }
+        if (bound == SQLITE_OK) { bound = sqlite3_bind_int(statement, 3, createdDay); }
+        if (bound == SQLITE_OK) { bound = sqlite3_bind_int(statement, 4, deliveryDay); }
+    }
+    const bool done = bound == SQLITE_OK && sqlite3_step(statement) == SQLITE_DONE && sqlite3_changes(db_) == 1;
+    const int finished = sqlite3_finalize(statement);
+    if (!done || finished != SQLITE_OK) { return cancel(); }
+    if (!exec(db_, "RELEASE merge_supplier_request;")) { return cancel(); }
+    return true;
 }
 
 std::vector<SupplierRequestRow>
@@ -1892,5 +1864,64 @@ bool Database::getExperimentReport(int warehouseId, ExperimentReport& report) co
         return false;
     }
     report = std::move(result);
+    return true;
+}
+
+bool Database::getWarehouseSupplySummary(int warehouseId,
+    std::vector<WarehouseSupplySummary>& rows) const {
+    rows.clear();
+    if (!db_ || warehouseId <= 0) { return false; }
+    const char* sql = R"SQL(
+        WITH active_orders AS (
+            SELECT o.store_id, oi.product_id,
+                SUM(oi.allocated_quantity) AS allocated,
+                SUM(MAX(0, oi.requested_quantity-oi.allocated_quantity)) AS missing
+            FROM orders o JOIN order_items oi ON oi.order_id=o.id
+            WHERE o.status IN ('Created','WaitingSupply','Allocated')
+            GROUP BY o.store_id,oi.product_id
+        ), demand AS (
+            SELECT si.product_id,
+                SUM(MAX(COALESCE(a.missing,0),
+                    MAX(0,MIN(si.capacity,11)-si.quantity-COALESCE(a.allocated,0)))) AS units
+            FROM store_inventory si
+            LEFT JOIN active_orders a ON a.store_id=si.store_id AND a.product_id=si.product_id
+            GROUP BY si.product_id
+        ), supply AS (
+            SELECT product_id,
+                SUM(CASE WHEN status='Created' THEN requested_quantity ELSE 0 END) AS ordered,
+                SUM(CASE WHEN status='InTransit' THEN requested_quantity ELSE 0 END) AS transit
+            FROM supplier_requests GROUP BY product_id
+        )
+        SELECT p.id,p.name,COALESCE(wi.quantity,0),COALESCE(d.units,0),
+            COALESCE(s.ordered,0),COALESCE(s.transit,0)
+        FROM products p
+        LEFT JOIN warehouse_inventory wi ON wi.product_id=p.id AND wi.warehouse_id=?1
+        LEFT JOIN demand d ON d.product_id=p.id
+        LEFT JOIN supply s ON s.product_id=p.id
+        ORDER BY p.id;
+    )SQL";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        sqlite3_finalize(stmt); return false;
+    }
+    if (sqlite3_bind_int(stmt,1,warehouseId) != SQLITE_OK) { sqlite3_finalize(stmt); return false; }
+    std::vector<WarehouseSupplySummary> result;
+    int status;
+    while ((status=sqlite3_step(stmt))==SQLITE_ROW) {
+        WarehouseSupplySummary row;
+        row.productId=sqlite3_column_int(stmt,0);
+        const unsigned char* name=sqlite3_column_text(stmt,1);
+        row.productName=name?reinterpret_cast<const char*>(name):"";
+        row.warehouseUnits=sqlite3_column_int64(stmt,2);
+        row.storeNeed=sqlite3_column_int64(stmt,3);
+        row.orderedUnits=sqlite3_column_int64(stmt,4);
+        row.inTransitUnits=sqlite3_column_int64(stmt,5);
+        const long long shortage=row.storeNeed-row.warehouseUnits-row.orderedUnits-row.inTransitUnits;
+        row.missingUnits=shortage>0?shortage:0;
+        result.push_back(std::move(row));
+    }
+    const int finalized=sqlite3_finalize(stmt);
+    if (status!=SQLITE_DONE || finalized!=SQLITE_OK) { return false; }
+    rows=std::move(result);
     return true;
 }

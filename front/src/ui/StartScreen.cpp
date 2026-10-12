@@ -9,7 +9,7 @@ bool StartScreen::draw(SimulationSettings& settings)
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
 
     const float windowWidth = 500.0f;
-    const float windowHeight = 420.0f;
+    const float windowHeight = 550.0f;
 
     ImGui::SetNextWindowPos(
         ImVec2(
@@ -74,6 +74,18 @@ bool StartScreen::draw(SimulationSettings& settings)
     ImGui::Separator();
     ImGui::Spacing();
 
+    ImGui::TextUnformatted("Режим подтверждения поставок");
+    if (ImGui::RadioButton("Ручной", !settings.automaticSupplierApproval)) {
+        settings.automaticSupplierApproval = false;
+    }
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Автоматический", settings.automaticSupplierApproval)) {
+        settings.automaticSupplierApproval = true;
+    }
+    ImGui::TextWrapped(settings.automaticSupplierApproval
+        ? "Заявки поставщику подтверждаются автоматически в конце дня."
+        : "Заявки поставщику нужно подтверждать вручную.");
+    ImGui::Spacing();
     ImGui::Text("Selected parameters:");
 
     ImGui::BulletText(
@@ -112,3 +124,4 @@ bool StartScreen::draw(SimulationSettings& settings)
 
     return startPressed;
 }
+
