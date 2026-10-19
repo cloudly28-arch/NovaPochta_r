@@ -26,7 +26,19 @@ bool Database::open(const std::string& path) {
     close();
     return false;
   }
-  exec(db_, "PRAGMA foreign_keys = ON;");
+  if (!exec(db_, "PRAGMA foreign_keys = ON;") || !executeSql(R"SQL(
+      CREATE TABLE IF NOT EXISTS experiment_settings (
+        id INTEGER PRIMARY KEY CHECK(id = 1),
+        initial_fill_percent INTEGER NOT NULL CHECK(initial_fill_percent BETWEEN -1 AND 100),
+        demand_percent INTEGER NOT NULL CHECK(demand_percent BETWEEN 50 AND 150),
+        stock_cover_days INTEGER NOT NULL CHECK(stock_cover_days BETWEEN 0 AND 14),
+        purchase_cost_percent INTEGER NOT NULL CHECK(purchase_cost_percent BETWEEN 1 AND 100)
+      );
+      INSERT OR IGNORE INTO experiment_settings VALUES(1, -1, 100, 0, 70);
+  )SQL")) {
+    close();
+    return false;
+  }
   return true;
 }
 void Database::close() {
@@ -57,6 +69,48 @@ bool Database::executeSql(const std::string& sql) {
   }
 
   return true;
+}
+
+bool Database::getExperimentSettings(ExperimentSettings& settings) const {
+  if (!db_) return false;
+  sqlite3_stmt* stmt = nullptr;
+  const char* sql =
+      "SELECT initial_fill_percent, demand_percent, "
+      "stock_cover_days, purchase_cost_percent "
+      "FROM experiment_settings WHERE id=1";
+  if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) != SQLITE_OK)
+    return false;
+  ExperimentSettings loaded;
+  const bool found = sqlite3_step(stmt) == SQLITE_ROW;
+  if (found) {
+    loaded.initialFillPercent = sqlite3_column_int(stmt, 0);
+    loaded.demandPercent = sqlite3_column_int(stmt, 1);
+    loaded.stockCoverDays = sqlite3_column_int(stmt, 2);
+    loaded.purchaseCostPercent = sqlite3_column_int(stmt, 3);
+  }
+  const int finalized = sqlite3_finalize(stmt);
+  if (!found || !loaded.isValid() || finalized != SQLITE_OK) return false;
+  settings = loaded;
+  return true;
+}
+
+bool Database::setExperimentSettings(const ExperimentSettings& settings) {
+  if (!db_ || !settings.isValid()) return false;
+  sqlite3_stmt* stmt = nullptr;
+  const char* sql =
+      "UPDATE experiment_settings SET initial_fill_percent=?1, "
+      "demand_percent=?2, stock_cover_days=?3, "
+      "purchase_cost_percent=?4 WHERE id=1";
+  if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) != SQLITE_OK)
+    return false;
+  const bool bound =
+      sqlite3_bind_int(stmt, 1, settings.initialFillPercent) == SQLITE_OK &&
+      sqlite3_bind_int(stmt, 2, settings.demandPercent) == SQLITE_OK &&
+      sqlite3_bind_int(stmt, 3, settings.stockCoverDays) == SQLITE_OK &&
+      sqlite3_bind_int(stmt, 4, settings.purchaseCostPercent) == SQLITE_OK;
+  const bool updated =
+      bound && sqlite3_step(stmt) == SQLITE_DONE && sqlite3_changes(db_) == 1;
+  return sqlite3_finalize(stmt) == SQLITE_OK && updated;
 }
 
 bool Database::loadWarehouse(Warehouse& warehouse) const {
@@ -1260,12 +1314,15 @@ bool Database::getExperimentReport(int warehouseId,
 
   // Aggregate each ledger separately to avoid multiplying rows in joins.
   const char* sql = R"SQL(
-        WITH shipped AS (
+        WITH costs AS (
+            SELECT purchase_cost_percent AS percent FROM experiment_settings WHERE id=1
+        ), shipped AS (
             SELECT b.product_id,
                    SUM(a.quantity) AS units,
                    SUM(a.quantity * a.actual_unit_price_cents) AS revenue,
                    SUM(a.quantity * (a.base_unit_price_cents -
-                                     a.actual_unit_price_cents)) AS discount_loss
+                                     a.actual_unit_price_cents)) AS discount_loss,
+                   SUM(a.quantity * ((a.base_unit_price_cents * (SELECT percent FROM costs) + 50) / 100)) AS cost
             FROM warehouse_allocations a
             JOIN warehouse_batches b ON b.id = a.batch_id
             JOIN orders o ON o.id = a.order_id AND o.status = 'Completed'
@@ -1279,9 +1336,11 @@ bool Database::getExperimentReport(int warehouseId,
             WHERE b.warehouse_id = ?1
             GROUP BY b.product_id
         ), losses AS (
-            SELECT product_id, SUM(quantity) AS units, SUM(loss_cents) AS loss
-            FROM warehouse_writeoffs WHERE warehouse_id = ?1
-            GROUP BY product_id
+            SELECT w.product_id, SUM(w.quantity) AS units, SUM(w.loss_cents) AS loss,
+                   SUM(w.quantity * ((b.unit_price_cents * (SELECT percent FROM costs) + 50) / 100)) AS cost
+            FROM warehouse_writeoffs w JOIN warehouse_batches b ON b.id=w.batch_id
+            WHERE w.warehouse_id = ?1
+            GROUP BY w.product_id
         ), stock AS (
             SELECT product_id, SUM(quantity) AS units
             FROM warehouse_inventory WHERE warehouse_id = ?1
@@ -1301,7 +1360,8 @@ bool Database::getExperimentReport(int warehouseId,
                COALESCE(losses.units, 0), COALESCE(losses.loss, 0),
                COALESCE(supplied.units, 0),
                (SELECT COUNT(*) FROM orders WHERE status = 'Completed'),
-               (SELECT COUNT(*) FROM orders WHERE status <> 'Completed')
+               (SELECT COUNT(*) FROM orders WHERE status <> 'Completed'),
+               COALESCE(shipped.cost, 0), COALESCE(losses.cost, 0)
         FROM products p
         LEFT JOIN stock ON stock.product_id = p.id
         LEFT JOIN shops ON shops.product_id = p.id
@@ -1321,6 +1381,10 @@ bool Database::getExperimentReport(int warehouseId,
     return false;
   }
   ExperimentReport result;
+  if (!getExperimentSettings(result.settings)) {
+    sqlite3_finalize(statement);
+    return false;
+  }
   int status = SQLITE_OK;
   while ((status = sqlite3_step(statement)) == SQLITE_ROW) {
     ExperimentProductResult item;
@@ -1337,6 +1401,10 @@ bool Database::getExperimentReport(int warehouseId,
     item.writtenOffUnits = sqlite3_column_int64(statement, 9);
     item.writeoffLossCents = sqlite3_column_int64(statement, 10);
     item.suppliedUnits = sqlite3_column_int64(statement, 11);
+    item.deliveredCostCents = sqlite3_column_int64(statement, 14);
+    item.writeoffCostCents = sqlite3_column_int64(statement, 15);
+    result.deliveredCostCents += item.deliveredCostCents;
+    result.writeoffCostCents += item.writeoffCostCents;
     result.completedOrders = sqlite3_column_int64(statement, 12);
     result.pendingOrders = sqlite3_column_int64(statement, 13);
     result.deliveredUnits += item.deliveredUnits;
@@ -1372,7 +1440,7 @@ bool Database::getWarehouseSupplySummary(
         ), demand AS (
             SELECT si.product_id,
                 SUM(MAX(COALESCE(a.missing,0),
-                    MAX(0,MIN(si.capacity,11)-si.quantity-COALESCE(a.allocated,0)))) AS units
+                    MAX(0,MIN(si.capacity,(12*(SELECT demand_percent FROM experiment_settings WHERE id=1)+99)/100)-si.quantity-COALESCE(a.allocated,0)))) AS units
             FROM store_inventory si
             LEFT JOIN active_orders a ON a.store_id=si.store_id AND a.product_id=si.product_id
             GROUP BY si.product_id

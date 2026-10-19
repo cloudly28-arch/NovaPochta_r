@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include "Warehouse.h"
+#include "domain/ExperimentSettings.h"
 
 struct StoreStockRow {
   int storeId{};
@@ -90,6 +91,8 @@ struct ExperimentProductResult {
   long long pendingUnits{};
   long long deliveredUnits{};
   long long revenueCents{};
+  long long deliveredCostCents{};
+  long long writeoffCostCents{};
   long long discountLossCents{};
   long long writtenOffUnits{};
   long long writeoffLossCents{};
@@ -97,9 +100,12 @@ struct ExperimentProductResult {
 };
 
 struct ExperimentReport {
+  ExperimentSettings settings;
   std::vector<ExperimentProductResult> products;
   long long deliveredUnits{};
   long long revenueCents{};
+  long long deliveredCostCents{};
+  long long writeoffCostCents{};
   long long discountLossCents{};
   long long writtenOffUnits{};
   long long writeoffLossCents{};
@@ -137,6 +143,9 @@ class Database {
   void close();
   bool isOpen() const;
   bool executeSql(const std::string& sql);
+
+  bool getExperimentSettings(ExperimentSettings& settings) const;
+  bool setExperimentSettings(const ExperimentSettings& settings);
 
   bool loadWarehouse(Warehouse& warehouse) const;
   std::vector<StoreStockRow> getStoreInventory(int storeId) const;

@@ -131,9 +131,9 @@ void Application::update() {
 
   if (currentScreen_ == Screen::Start) {
     if (startScreen_.draw(settings_)) {
-      const bool started =
-          backend_.startExperiment(databasePath_.string(), schemaPath_.string(),
-                                   settings_.stores, settings_.products);
+      const bool started = backend_.startExperiment(
+          databasePath_.string(), schemaPath_.string(), settings_.stores,
+          settings_.products, settings_.experiment);
 
       if (started) {
         simulationScreen_.configure(settings_);

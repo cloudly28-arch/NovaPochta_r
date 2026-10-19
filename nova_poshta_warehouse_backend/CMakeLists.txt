@@ -54,3 +54,14 @@ target_link_libraries(
     PRIVATE
     nova_warehouse_backend
 )
+
+option(NOVA_BUILD_TESTS "Build experiment settings regression tests" OFF)
+if(NOVA_BUILD_TESTS)
+    enable_testing()
+    add_executable(experiment_settings_test tests/experiment_settings_test.cpp)
+    target_link_libraries(experiment_settings_test PRIVATE nova_warehouse_backend)
+    add_test(NAME experiment_settings
+        COMMAND experiment_settings_test
+            ${CMAKE_CURRENT_SOURCE_DIR}/database/schema.sql
+            ${CMAKE_CURRENT_BINARY_DIR}/experiment_settings_test.db)
+endif()

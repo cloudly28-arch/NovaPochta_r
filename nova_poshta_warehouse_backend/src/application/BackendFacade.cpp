@@ -10,12 +10,19 @@ namespace {
 long long adjustedFoodStock(long long quantity, int shelfLifeDays) {
   return shelfLifeDays <= 7 ? (quantity * 110 + 99) / 100 : quantity;
 }
-int stockCoverDays(int shelfLifeDays) {
+int stockCoverDays(int shelfLifeDays, int configuredDays) {
+  if (configuredDays > 0) {
+    return std::min(configuredDays, std::max(1, shelfLifeDays - 1));
+  }
   if (shelfLifeDays <= 7) {
     return std::min(3, std::max(1, shelfLifeDays - 1));
   }
   return shelfLifeDays <= 30 ? 5 : 7;
 }
+}
+
+int BackendFacade::expectedDailySales(int capacity) const {
+  return std::min(capacity, (12 * settings_.demandPercent + 99) / 100);
 }
 
 bool BackendFacade::initialize(const std::string& databasePath) {
@@ -38,6 +45,11 @@ bool BackendFacade::initialize(const std::string& databasePath) {
     return false;
   }
 
+  if (!database_.getExperimentSettings(settings_)) {
+    lastError_ = "Cannot load experiment settings";
+    database_.close();
+    return false;
+  }
   ready_ = true;
   return true;
 }
@@ -95,6 +107,11 @@ bool BackendFacade::resetDatabase(const std::string& databasePath,
     return false;
   }
 
+  if (!prepared.setExperimentSettings(settings_)) {
+    lastError_ = "Cannot save experiment settings: " + prepared.getLastError();
+    return false;
+  }
+
   Warehouse initialWarehouse;
 
   if (!prepared.loadWarehouse(initialWarehouse)) {
@@ -115,23 +132,30 @@ bool BackendFacade::resetDatabase(const std::string& databasePath,
       for (const StoreStockRow& item :
            prepared.getStoreInventory(store.getId())) {
         if (item.productId == product.productId) {
-          dailyDemand += std::min(12, item.capacity);
+          dailyDemand += expectedDailySales(item.capacity);
         }
       }
     }
     const long long pack = std::max(1, product.unitsPerPackage);
-    const int coverDays = stockCoverDays(product.shelfLifeDays);
+    const int coverDays =
+        stockCoverDays(product.shelfLifeDays, settings_.stockCoverDays);
     const long long target =
         adjustedFoodStock((dailyDemand * coverDays *
                                (100 + surplusDistribution(initialGenerator)) +
                            99) /
                               100,
                           product.shelfLifeDays);
+    const long long capacity =
+        (static_cast<long long>(product.capacity) / pack) * pack;
     const long long quantity =
-        std::min(((target + pack - 1) / pack) * pack,
-                 (static_cast<long long>(product.capacity) / pack) * pack);
+        settings_.initialFillPercent < 0
+            ? std::min(((target + pack - 1) / pack) * pack, capacity)
+            : (static_cast<long long>(product.capacity) *
+               settings_.initialFillPercent / 100 / pack) *
+                  pack;
+    // The reorder point describes demand, even if the warehouse starts empty.
     const long long minimum = std::min(
-        quantity,
+        capacity,
         ((dailyDemand * std::min(3, coverDays) + pack - 1) / pack) * pack);
     initialStockSql +=
         "UPDATE warehouse_inventory SET quantity=" + std::to_string(quantity) +
@@ -390,6 +414,9 @@ bool BackendFacade::simulateStoreSales(int currentDay, int intervalIndex) {
       static_cast<unsigned int>(currentDay * 1009 + intervalIndex * 9176));
 
   std::uniform_int_distribution<int> salesDistribution(1, 2);
+  std::mt19937 roundingGenerator(
+      static_cast<unsigned int>(currentDay * 3571 + intervalIndex * 6151));
+  std::uniform_int_distribution<int> roundingDistribution(0, 99);
 
   const std::vector<StoreInfo> stores = getStores();
 
@@ -401,7 +428,13 @@ bool BackendFacade::simulateStoreSales(int currentDay, int intervalIndex) {
         continue;
       }
 
-      const int sold = std::min(salesDistribution(generator), product.quantity);
+      const int scaled = salesDistribution(generator) * settings_.demandPercent;
+      // Unbiased fractional units: 50% demand must allow zero sales in an
+      // interval.
+      const int requested =
+          scaled / 100 +
+          (roundingDistribution(roundingGenerator) < scaled % 100 ? 1 : 0);
+      const int sold = std::min(requested, product.quantity);
 
       if (!database_.changeStoreQuantity(store.id, product.productId, -sold)) {
         lastError_ = "Cannot update store stock: " + database_.getLastError();
@@ -771,7 +804,7 @@ void BackendFacade::processSupplierRequests(int currentDay) {
         if (item.productId != product.productId) {
           continue;
         }
-        const int consumption = std::min(12, item.capacity);
+        const int consumption = expectedDailySales(item.capacity);
         dailyDemand += consumption;
         long long allocated = 0;
         StoreOrderRow order;
@@ -793,7 +826,8 @@ void BackendFacade::processSupplierRequests(int currentDay) {
       }
     }
     const long long stockPosition = product.quantity + alreadyOrdered;
-    const int coverDays = stockCoverDays(product.shelfLifeDays);
+    const int coverDays =
+        stockCoverDays(product.shelfLifeDays, settings_.stockCoverDays);
     const long long reserveTarget =
         adjustedFoodStock((dailyDemand * coverDays * (100 + buffer) + 99) / 100,
                           product.shelfLifeDays);
@@ -831,22 +865,28 @@ void BackendFacade::processSupplierRequests(int currentDay) {
 
 bool BackendFacade::startExperiment(const std::string& databasePath,
                                     const std::string& schemaPath,
-                                    int storeCount, int productCount) {
+                                    int storeCount, int productCount,
+                                    const ExperimentSettings& settings) {
   if (storeCount < 3 || storeCount > 9 || productCount < 12 ||
-      productCount > 20) {
-    lastError_ = "Stores must be 3..9 and products must be 12..20";
+      productCount > 20 || !settings.isValid()) {
+    lastError_ =
+        "Invalid settings: stores 3..9, products 12..20, fill -1..100, "
+        "demand 50..150, cover days 0..14, purchase cost 1..100";
     return false;
   }
 
   const int previousStoreCount = storeCount_;
   const int previousProductCount = productCount_;
+  const ExperimentSettings previousSettings = settings_;
 
   storeCount_ = storeCount;
   productCount_ = productCount;
+  settings_ = settings;
 
   if (!resetDatabase(databasePath, schemaPath)) {
     storeCount_ = previousStoreCount;
     productCount_ = previousProductCount;
+    settings_ = previousSettings;
     return false;
   }
 

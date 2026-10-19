@@ -1860,8 +1860,11 @@ void SimulationScreen::drawWarehouseWriteoffs() {
 
   ImGui::Text("Списано единиц: %lld", totalQuantity);
 
-  ImGui::Text("Убытки от списаний: %.2f руб.", totalLossCents / 100.0);
+  ImGui::Text("Стоимость списаний по обычной цене: %.2f руб.",
+              totalLossCents / 100.0);
 
+  ImGui::TextWrapped(
+      "В итоговом финансовом отчёте списания учитываются по закупочной стоимости.");
   if (warehouseWriteoffs_.empty()) {
     ImGui::TextUnformatted("Списаний пока нет.");
     return;
@@ -1876,7 +1879,7 @@ void SimulationScreen::drawWarehouseWriteoffs() {
     ImGui::TableSetupColumn("Партия");
     ImGui::TableSetupColumn("Товар");
     ImGui::TableSetupColumn("Количество");
-    ImGui::TableSetupColumn("Убытки, руб.");
+    ImGui::TableSetupColumn("Обычная стоимость, руб.");
     ImGui::TableHeadersRow();
 
     for (const WarehouseWriteoffRow& row : warehouseWriteoffs_) {
@@ -2052,14 +2055,32 @@ void SimulationScreen::drawFinalReport() {
               finalReport_.revenueCents / 100.0);
   ImGui::Text("Снижение выручки из-за уценки: %.2f руб.",
               finalReport_.discountLossCents / 100.0);
-  ImGui::Text("Списано: %lld шт. | Потери от списаний: %.2f руб.",
+  ImGui::Text("Закупочная цена: %d%% обычной цены | Спрос: %d%%",
+              finalReport_.settings.purchaseCostPercent,
+              finalReport_.settings.demandPercent);
+  if (finalReport_.settings.initialFillPercent < 0) {
+    ImGui::TextUnformatted("Начальный запас: по спросу");
+  } else {
+    ImGui::Text("Начальная заполненность: %d%%",
+                finalReport_.settings.initialFillPercent);
+  }
+  if (finalReport_.settings.stockCoverDays == 0) {
+    ImGui::TextUnformatted("Целевой запас: по сроку годности");
+  } else {
+    ImGui::Text("Целевой резерв: %d дней с учётом срока годности",
+                finalReport_.settings.stockCoverDays);
+  }
+  ImGui::Text("Себестоимость доставленного: %.2f руб.",
+              finalReport_.deliveredCostCents / 100.0);
+  ImGui::Text("Списано: %lld шт. | Себестоимость списаний: %.2f руб.",
               finalReport_.writtenOffUnits,
-              finalReport_.writeoffLossCents / 100.0);
-  ImGui::Text(
-      "Выручка за вычетом списаний: %.2f руб.",
-      (finalReport_.revenueCents - finalReport_.writeoffLossCents) / 100.0);
+              finalReport_.writeoffCostCents / 100.0);
+  ImGui::Text("Валовой результат после списаний: %.2f руб.",
+              (finalReport_.revenueCents - finalReport_.deliveredCostCents -
+               finalReport_.writeoffCostCents) /
+                  100.0);
   ImGui::TextWrapped(
-      "Прибыль не рассчитана: закупочная стоимость и расходы не заданы. "
+      "Закупочная цена постоянна в рамках эксперимента. Транспорт, зарплаты и хранение не учтены. "
       "Уценка уже учтена в выручке и повторно не вычитается. "
       "Выручка отражает стоимость доставки со склада, а не продажи магазинов покупателям.");
   ImGui::Separator();
@@ -2084,11 +2105,11 @@ void SimulationScreen::drawFinalReport() {
                           1590.0f)) {
       ImGui::TableSetupColumn("Товар", ImGuiTableColumnFlags_WidthFixed,
                               200.0f);
-      const char* headers[] = {"На складе, шт.",  "В магазинах, шт.",
-                               "В резерве, шт.",  "Доставлено, шт.",
-                               "Доставлено, уп.", "Выручка, руб.",
-                               "Уценка, руб.",    "Списано, шт.",
-                               "Списания, руб.",  "Поставлено, шт."};
+      const char* headers[] = {"На складе, шт.",         "В магазинах, шт.",
+                               "В резерве, шт.",         "Доставлено, шт.",
+                               "Доставлено, уп.",        "Выручка, руб.",
+                               "Уценка, руб.",           "Списано, шт.",
+                               "Себест. списаний, руб.", "Поставлено, шт."};
       for (const char* header : headers) {
         ImGui::TableSetupColumn(header, ImGuiTableColumnFlags_WidthFixed,
                                 135.0f);
@@ -2118,7 +2139,7 @@ void SimulationScreen::drawFinalReport() {
         ImGui::TableSetColumnIndex(8);
         ImGui::Text("%lld", item.writtenOffUnits);
         ImGui::TableSetColumnIndex(9);
-        ImGui::Text("%.2f", item.writeoffLossCents / 100.0);
+        ImGui::Text("%.2f", item.writeoffCostCents / 100.0);
         ImGui::TableSetColumnIndex(10);
         ImGui::Text("%lld", item.suppliedUnits);
       }
@@ -2153,7 +2174,7 @@ void SimulationScreen::recordDailyFinance() {
   }
   DailyFinance& today = dailyFinance_[currentDay_ - 1];
   today.revenueCents = totals.revenueCents - earlierRevenue;
-  today.writeoffCents = totals.writeoffLossCents - earlierWriteoffs;
+  today.writeoffCents = totals.writeoffCostCents - earlierWriteoffs;
   today.recorded = true;
 }
 
@@ -2178,7 +2199,7 @@ void SimulationScreen::drawDailyFinanceChart() {
     writeoffTotal += day.writeoffCents;
   }
   if (revenueTotal != finalReport_.revenueCents ||
-      writeoffTotal != finalReport_.writeoffLossCents) {
+      writeoffTotal != finalReport_.writeoffCostCents) {
     ImGui::TextWrapped(
         "История дней не совпадает с итогами базы. "
         "Начните новый эксперимент для построения графика.");
@@ -2187,7 +2208,8 @@ void SimulationScreen::drawDailyFinanceChart() {
   maximum *= 1.1;
   ImGui::TextColored(ImVec4(0.3f, 0.9f, 0.45f, 1.0f), "Выручка за день");
   ImGui::SameLine();
-  ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.35f, 1.0f), "Списания за день");
+  ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.35f, 1.0f),
+                     "Себестоимость списаний за день");
   ImGui::TextWrapped(
       "Суммы в рублях. Наведите мышь на график для просмотра дня. "
       "Выручка учитывает только завершённые доставки; это не прибыль.");

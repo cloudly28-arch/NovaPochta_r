@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "Warehouse.h"
+#include "domain/ExperimentSettings.h"
 #include "persistence/Database.h"
 
 struct StoreInfo {
@@ -90,7 +91,8 @@ class BackendFacade {
   const std::string& getLastError() const;
   bool startExperiment(const std::string& databasePath,
                        const std::string& schemaPath, int storeCount,
-                       int productCount);
+                       int productCount,
+                       const ExperimentSettings& settings = {});
   void processSupplierDeliveries(int currentDay);
 
   bool getWarehouseBatches(std::vector<WarehouseBatchRow>& batches) const;
@@ -102,6 +104,9 @@ class BackendFacade {
   bool approveSupplierRequest(int requestId, int currentDay);
 
  private:
+  int expectedDailySales(int capacity) const;
+
+  ExperimentSettings settings_;
   Database database_;
   Warehouse warehouse_;
   bool ready_{false};
