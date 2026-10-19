@@ -6,144 +6,107 @@
 #include "Warehouse.h"
 #include "persistence/Database.h"
 
-struct StoreInfo
-{
-    int id{};
-    std::string name;
+struct StoreInfo {
+  int id{};
+  std::string name;
 };
 
-struct ProductStockInfo
-{
-    int productId{};
-    std::string productName;
-    int quantity{};
-    int capacity{};
-    int minStock{};
+struct ProductStockInfo {
+  int productId{};
+  std::string productName;
+  int quantity{};
+  int capacity{};
+  int minStock{};
 };
-struct WarehouseStockInfo
-{
-    int productId{};
-    std::string productName;
-    int quantity{};
-    int capacity{};
-    int minStock{};
-    int unitPriceCents{};
-    int shelfLifeDays{};
-    int unitsPerPackage{1};
+struct WarehouseStockInfo {
+  int productId{};
+  std::string productName;
+  int quantity{};
+  int capacity{};
+  int minStock{};
+  int unitPriceCents{};
+  int shelfLifeDays{};
+  int unitsPerPackage{1};
 };
-struct SupplierRequestInfo
-{
-    int id{};
-    int productId{};
+struct SupplierRequestInfo {
+  int id{};
+  int productId{};
 
-    std::string productName;
+  std::string productName;
 
-    int requestedQuantity{};
-    int createdDay{};
-    int deliveryDay{};
+  int requestedQuantity{};
+  int createdDay{};
+  int deliveryDay{};
 
-    std::string status;
+  std::string status;
 };
-struct OrderItemInfo
-{
-    int productId{};
-    std::string productName;
+struct OrderItemInfo {
+  int productId{};
+  std::string productName;
 
-    int requestedQuantity{};
-    int allocatedQuantity{};
+  int requestedQuantity{};
+  int allocatedQuantity{};
 };
 
-struct StoreOrderInfo
-{
-    int id{};
-    int storeId{};
+struct StoreOrderInfo {
+  int id{};
+  int storeId{};
 
-    int createdDay{};
-    int deliveryDay{};
+  int createdDay{};
+  int deliveryDay{};
 
-    std::string status;
+  std::string status;
 
-    std::vector<OrderItemInfo> items;
+  std::vector<OrderItemInfo> items;
 };
-class BackendFacade
-{
-public:
-    bool initialize(const std::string& databasePath);
-    bool resetDatabase(
-        const std::string& databasePath,
-        const std::string& schemaPath
-    );
-    bool isReady() const;
-    bool getWarehouseSupplySummary(std::vector<WarehouseSupplySummary>& rows) const;
-    bool canDispatchStoreOrder(int storeId, int deliveryDay) const;
-    bool getExperimentReport(ExperimentReport& report) const;
+class BackendFacade {
+ public:
+  bool initialize(const std::string& databasePath);
+  bool resetDatabase(const std::string& databasePath,
+                     const std::string& schemaPath);
+  bool isReady() const;
+  bool getWarehouseSupplySummary(
+      std::vector<WarehouseSupplySummary>& rows) const;
+  bool canDispatchStoreOrder(int storeId, int deliveryDay) const;
+  bool getExperimentReport(ExperimentReport& report) const;
 
-    std::vector<StoreInfo> getStores() const;
-    std::string getStoreName(int storeId) const;
+  std::vector<StoreInfo> getStores() const;
+  std::string getStoreName(int storeId) const;
 
-    std::vector<ProductStockInfo>
-    getStoreInventory(int storeId) const;
-    std::vector<WarehouseStockInfo>
-    getWarehouseInventory() const;
-    std::vector<SupplierRequestInfo>
-    getSupplierRequests() const;
+  std::vector<ProductStockInfo> getStoreInventory(int storeId) const;
+  std::vector<WarehouseStockInfo> getWarehouseInventory() const;
+  std::vector<SupplierRequestInfo> getSupplierRequests() const;
 
-    bool createSupplierRequest(
-        int productId,
-        int quantity,
-        int currentDay,
-        int deliveryDay
-    );
+  bool createSupplierRequest(int productId, int quantity, int currentDay,
+                             int deliveryDay);
 
-    bool completeSupplierRequest(int requestId, int receivedDay = 0);
+  bool completeSupplierRequest(int requestId, int receivedDay = 0);
 
-    bool getActiveStoreOrder(
-    int storeId,
-        StoreOrderInfo& order
-    ) const;
-    bool simulateStoreSales(int currentDay, int intervalIndex = 1);
-    void processStoreDeliveries(int currentDay, int onlyStoreId = 0);
-    void processStoreOrders(
-        int currentDay
-    );
-    void processSupplierRequests(
-        int currentDay
-    );
-    const std::string& getLastError() const;
-    bool startExperiment(
-        const std::string& databasePath,
-        const std::string& schemaPath,
-        int storeCount,
-        int productCount
-    );
-    void processSupplierDeliveries(int currentDay);
+  bool getActiveStoreOrder(int storeId, StoreOrderInfo& order) const;
+  bool simulateStoreSales(int currentDay, int intervalIndex = 1);
+  void processStoreDeliveries(int currentDay, int onlyStoreId = 0);
+  void processStoreOrders(int currentDay);
+  void processSupplierRequests(int currentDay);
+  const std::string& getLastError() const;
+  bool startExperiment(const std::string& databasePath,
+                       const std::string& schemaPath, int storeCount,
+                       int productCount);
+  void processSupplierDeliveries(int currentDay);
 
-    bool getWarehouseBatches(
-        std::vector<WarehouseBatchRow>& batches
-    ) const;
-    bool writeOffExpiredBatches(int currentDay);
-    bool getWarehouseWriteoffs(
-        std::vector<WarehouseWriteoffRow>& writeoffs
-    ) const;
-    bool setBatchDiscount(
-        int batchId,
-        int percent,
-        int currentDay
-    );
-    bool getWarehouseAllocationStats(
-        WarehouseAllocationStats& stats
-    ) const;
-    bool approveSupplierRequest(
-        int requestId,
-        int currentDay
-    );
-private:
-    Database database_;
-    Warehouse warehouse_;
-    bool ready_{false};
-    
-    std::string lastError_;
-    int storeCount_ = 9;
-    int productCount_ = 20;
+  bool getWarehouseBatches(std::vector<WarehouseBatchRow>& batches) const;
+  bool writeOffExpiredBatches(int currentDay);
+  bool getWarehouseWriteoffs(
+      std::vector<WarehouseWriteoffRow>& writeoffs) const;
+  bool setBatchDiscount(int batchId, int percent, int currentDay);
+  bool getWarehouseAllocationStats(WarehouseAllocationStats& stats) const;
+  bool approveSupplierRequest(int requestId, int currentDay);
+
+ private:
+  Database database_;
+  Warehouse warehouse_;
+  bool ready_{false};
+
+  std::string lastError_;
+  int storeCount_ = 9;
+  int productCount_ = 20;
 };
-

@@ -4,8 +4,9 @@
 
 Vehicle::Vehicle(int id, std::string model, double maxLoad)
     : id_(id), model_(std::move(model)), maxLoad_(maxLoad) {
-    if (id_ <= 0) throw std::invalid_argument("Vehicle id must be positive");
-    if (maxLoad_ < 0) throw std::invalid_argument("Vehicle max load cannot be negative");
+  if (id_ <= 0) throw std::invalid_argument("Vehicle id must be positive");
+  if (maxLoad_ < 0)
+    throw std::invalid_argument("Vehicle max load cannot be negative");
 }
 int Vehicle::getId() const { return id_; }
 const std::string& Vehicle::getModel() const { return model_; }
