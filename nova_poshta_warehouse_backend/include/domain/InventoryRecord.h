@@ -10,8 +10,7 @@ class InventoryRecord {
   int quantity_{};
   int reservedQuantity_{};
   std::string batchNumber_;
-  std::string expirationDate_;  // YYYY-MM-DD, empty for non-expiring goods
-
+  std::string expirationDate_; 
  public:
   InventoryRecord() = default;
   InventoryRecord(int id, int productId, int storageCellId, int quantity,

@@ -867,10 +867,10 @@ bool BackendFacade::startExperiment(const std::string& databasePath,
                                     const std::string& schemaPath,
                                     int storeCount, int productCount,
                                     const ExperimentSettings& settings) {
-  if (storeCount < 3 || storeCount > 9 || productCount < 12 ||
+  if (storeCount < 3 || storeCount > 9 || productCount < 11 ||
       productCount > 20 || !settings.isValid()) {
     lastError_ =
-        "Invalid settings: stores 3..9, products 12..20, fill -1..100, "
+        "Invalid settings: stores 3..9, products 11..20, fill -1..100, "
         "demand 50..150, cover days 0..14, purchase cost 1..100";
     return false;
   }

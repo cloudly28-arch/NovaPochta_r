@@ -85,23 +85,37 @@ Application::Application()
 
   ImGuiStyle& style = ImGui::GetStyle();
 
-  style.WindowRounding = 8.0f;
-  style.FrameRounding = 6.0f;
-  style.GrabRounding = 6.0f;
-
-  style.WindowPadding = ImVec2(20.0f, 20.0f);
-
-  style.FramePadding = ImVec2(10.0f, 8.0f);
-
-  style.Colors[ImGuiCol_Button] = ImVec4(0.75f, 0.05f, 0.08f, 1.0f);
-
-  style.Colors[ImGuiCol_ButtonHovered] = ImVec4(0.90f, 0.08f, 0.10f, 1.0f);
-
-  style.Colors[ImGuiCol_ButtonActive] = ImVec4(0.60f, 0.03f, 0.05f, 1.0f);
-
-  style.Colors[ImGuiCol_SliderGrab] = ImVec4(0.85f, 0.05f, 0.08f, 1.0f);
-
-  style.Colors[ImGuiCol_SliderGrabActive] = ImVec4(1.0f, 0.10f, 0.12f, 1.0f);
+  style.WindowRounding = 10.0f;
+  style.ChildRounding = 8.0f;
+  style.FrameRounding = 5.0f;
+  style.GrabRounding = 4.0f;
+  style.TabRounding = 5.0f;
+  style.WindowPadding = ImVec2(20.0f, 18.0f);
+  style.FramePadding = ImVec2(10.0f, 6.0f);
+  style.ItemSpacing = ImVec2(9.0f, 7.0f);
+  style.Colors[ImGuiCol_WindowBg] = ImVec4(0.055f, 0.08f, 0.12f, 0.98f);
+  style.Colors[ImGuiCol_ChildBg] = ImVec4(0.08f, 0.115f, 0.16f, 1.0f);
+  style.Colors[ImGuiCol_PopupBg] = ImVec4(0.07f, 0.10f, 0.15f, 1.0f);
+  style.Colors[ImGuiCol_Border] = ImVec4(0.18f, 0.24f, 0.31f, 0.8f);
+  style.Colors[ImGuiCol_Text] = ImVec4(0.9f, 0.94f, 0.98f, 1.0f);
+  style.Colors[ImGuiCol_TextDisabled] = ImVec4(0.53f, 0.61f, 0.71f, 1.0f);
+  style.Colors[ImGuiCol_TitleBg] = ImVec4(0.07f, 0.11f, 0.16f, 1.0f);
+  style.Colors[ImGuiCol_TitleBgActive] = ImVec4(0.10f, 0.18f, 0.23f, 1.0f);
+  style.Colors[ImGuiCol_FrameBg] = ImVec4(0.12f, 0.17f, 0.23f, 1.0f);
+  style.Colors[ImGuiCol_FrameBgHovered] = ImVec4(0.16f, 0.23f, 0.30f, 1.0f);
+  style.Colors[ImGuiCol_FrameBgActive] = ImVec4(0.18f, 0.28f, 0.34f, 1.0f);
+  style.Colors[ImGuiCol_Button] = ImVec4(0.12f, 0.29f, 0.30f, 1.0f);
+  style.Colors[ImGuiCol_ButtonHovered] = ImVec4(0.16f, 0.43f, 0.41f, 1.0f);
+  style.Colors[ImGuiCol_ButtonActive] = ImVec4(0.12f, 0.52f, 0.47f, 1.0f);
+  style.Colors[ImGuiCol_Header] = ImVec4(0.12f, 0.29f, 0.30f, 1.0f);
+  style.Colors[ImGuiCol_HeaderHovered] = ImVec4(0.16f, 0.43f, 0.41f, 1.0f);
+  style.Colors[ImGuiCol_HeaderActive] = ImVec4(0.12f, 0.52f, 0.47f, 1.0f);
+  style.Colors[ImGuiCol_SliderGrab] = ImVec4(0.25f, 0.84f, 0.76f, 1.0f);
+  style.Colors[ImGuiCol_SliderGrabActive] = ImVec4(0.40f, 0.95f, 0.85f, 1.0f);
+  style.Colors[ImGuiCol_CheckMark] = style.Colors[ImGuiCol_SliderGrab];
+  style.Colors[ImGuiCol_Tab] = ImVec4(0.09f, 0.17f, 0.22f, 1.0f);
+  style.Colors[ImGuiCol_TabHovered] = ImVec4(0.16f, 0.43f, 0.41f, 1.0f);
+  style.Colors[ImGuiCol_TabSelected] = ImVec4(0.12f, 0.31f, 0.32f, 1.0f);
 }
 
 Application::~Application() { ImGui::SFML::Shutdown(); }
@@ -128,6 +142,11 @@ void Application::update() {
   const sf::Time deltaTime = deltaClock_.restart();
 
   ImGui::SFML::Update(window_, deltaTime);
+
+  if (currentScreen_ == Screen::Simulation &&
+      simulationScreen_.consumeSettingsRequest()) {
+    currentScreen_ = Screen::Start;
+  }
 
   if (currentScreen_ == Screen::Start) {
     if (startScreen_.draw(settings_)) {

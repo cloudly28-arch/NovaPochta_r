@@ -12,6 +12,7 @@
 class SimulationScreen {
  public:
   void update(float deltaTime);
+  bool consumeSettingsRequest();
 
   void draw(sf::RenderWindow& window, const SimulationSettings& settings);
 
@@ -130,6 +131,7 @@ class SimulationScreen {
   double ambientTime_ = 0.0;
   enum class FinaleState { None, Approach, Explosion, Done };
   FinaleState finaleState_ = FinaleState::None;
+  bool finaleEnabled_ = false;
   float finaleTimer_ = 0.0f;
   sf::Vector2f lastPlanePosition_{100.0f, 150.0f};
   sf::Vector2f finaleStart_;
@@ -143,6 +145,7 @@ class SimulationScreen {
   void drawFinalExplosion(sf::RenderWindow& window);
   void approveSupplierRequestsAutomatically();
   bool automaticSupplierApproval_ = false;
+  bool settingsRequested_ = false;
   void drawFinalReport();
   void recordDailyFinance();
   void drawDailyFinanceChart();

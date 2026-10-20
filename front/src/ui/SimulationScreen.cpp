@@ -8,6 +8,12 @@
 #include <initializer_list>
 #include <random>
 
+bool SimulationScreen::consumeSettingsRequest() {
+  const bool requested = settingsRequested_;
+  settingsRequested_ = false;
+  return requested;
+}
+
 void SimulationScreen::update(float deltaTime) {
   // Decorative motion uses real time, independently of simulation speed.
   if (std::isfinite(deltaTime) && deltaTime > 0.0f) {
@@ -144,42 +150,45 @@ void SimulationScreen::ensureStoresCreated(int storeCount) {
 }
 
 void SimulationScreen::drawTopBar(const SimulationSettings& settings) {
-  const ImVec2 displaySize = ImGui::GetIO().DisplaySize;
-
-  ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f), ImGuiCond_Always);
-
-  ImGui::SetNextWindowSize(ImVec2(displaySize.x, 70.0f), ImGuiCond_Always);
-
+  const ImVec2 display = ImGui::GetIO().DisplaySize;
+  ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
+  ImGui::SetNextWindowSize(ImVec2(display.x, 76), ImGuiCond_Always);
   ImGui::Begin("TopBar", nullptr,
                ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-                   ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
-
-  ImGui::Text("NOVA WAREHOUSE");
-
-  ImGui::SameLine(280.0f);
-
-  ImGui::Text("Day: %d / %d", currentDay_, totalDays_);
-
-  ImGui::SameLine(450.0f);
-
-  ImGui::Text("Stores: %d", settings.stores);
-
-  ImGui::SameLine(600.0f);
-
-  ImGui::Text("Products: %d", settings.products);
-
-  ImGui::SameLine(800.0f);
-
-  if (simulationState_ == SimulationState::Running) {
-    ImGui::Text("Status: RUNNING");
-  } else if (simulationState_ == SimulationState::Paused) {
-    ImGui::Text("Status: PAUSED");
-  } else if (simulationState_ == SimulationState::Finished) {
-    ImGui::Text("Status: FINISHED");
-  } else {
-    ImGui::Text("Status: STOPPED");
+                   ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
+                   ImGuiWindowFlags_NoScrollbar);
+  ImGui::TextColored(ImVec4(0.25f, 0.84f, 0.76f, 1), "NOVA / WAREHOUSE");
+  ImGui::SameLine(280);
+  ImGui::Text("День %d / %d", currentDay_, totalDays_);
+  if (display.x >= 1000) {
+    ImGui::SameLine(470);
+    ImGui::TextDisabled("%d магазинов / %d товаров", settings.stores,
+                        settings.products);
   }
-
+  const char* status = "ГОТОВ К ЗАПУСКУ";
+  ImVec4 color(0.53f, 0.61f, 0.71f, 1);
+  if (simulationState_ == SimulationState::Running) {
+    status = "МОДЕЛИРОВАНИЕ";
+    color = ImVec4(0.25f, 0.84f, 0.76f, 1);
+  } else if (simulationState_ == SimulationState::Paused) {
+    status = "ПАУЗА";
+    color = ImVec4(0.96f, 0.74f, 0.38f, 1);
+  } else if (simulationState_ == SimulationState::Finished) {
+    status = "ЗАВЕРШЕНО";
+    color = ImVec4(0.25f, 0.84f, 0.76f, 1);
+  }
+  ImGui::SameLine(std::max(470.0f, display.x - 250));
+  ImGui::TextColored(color, "%s", status);
+  const float progress =
+      simulationState_ == SimulationState::Finished
+          ? 1.0f
+          : std::clamp((currentDay_ - 1 +
+                        dayTimer_ / std::max(secondsPerDay_, 0.001f)) /
+                           std::max(1, totalDays_),
+                       0.0f, 1.0f);
+  ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImVec4(0.25f, 0.84f, 0.76f, 1));
+  ImGui::ProgressBar(progress, ImVec2(-1, 4), "");
+  ImGui::PopStyleColor();
   ImGui::End();
 }
 
@@ -197,7 +206,7 @@ void SimulationScreen::drawBottomBar() {
                ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
                    ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
 
-  if (ImGui::Button("START", ImVec2(100.0f, 40.0f))) {
+  if (ImGui::Button("Старт", ImVec2(100.0f, 40.0f))) {
     bool canStart = true;
 
     if (simulationState_ == SimulationState::Finished) {
@@ -262,7 +271,7 @@ void SimulationScreen::drawBottomBar() {
   }
   ImGui::SameLine();
 
-  if (ImGui::Button("PAUSE", ImVec2(100.0f, 40.0f))) {
+  if (ImGui::Button("Пауза", ImVec2(100.0f, 40.0f))) {
     if (simulationState_ == SimulationState::Running) {
       simulationState_ = SimulationState::Paused;
     }
@@ -270,7 +279,7 @@ void SimulationScreen::drawBottomBar() {
 
   ImGui::SameLine();
 
-  if (ImGui::Button("STOP", ImVec2(100.0f, 40.0f))) {
+  if (ImGui::Button("Сброс", ImVec2(100.0f, 40.0f))) {
     bool resetOk = false;
 
     if (backend_ != nullptr && !databasePath_.empty() && !schemaPath_.empty()) {
@@ -390,7 +399,14 @@ void SimulationScreen::drawBottomBar() {
 
   dayProgress = std::clamp(dayProgress, 0.0f, 1.0f);
 
-  ImGui::ProgressBar(dayProgress, ImVec2(200.0f, 20.0f));
+  ImGui::ProgressBar(dayProgress, ImVec2(150.0f, 20.0f));
+  ImGui::SameLine(1070.0f);
+  if (ImGui::Button("Новый сценарий", ImVec2(180.0f, 40.0f))) {
+    simulationState_ = SimulationState::Paused;
+    finaleState_ = FinaleState::None;
+    finalReportVisible_ = false;
+    settingsRequested_ = true;
+  }
 
   ImGui::End();
 }
@@ -1690,6 +1706,20 @@ void SimulationScreen::refreshSupplierData() {
 }
 
 void SimulationScreen::configure(const SimulationSettings& settings) {
+  finaleEnabled_ = settings.stores == 9 && settings.products == 11;
+  settingsRequested_ = false;
+  selectedType_ = SelectedObjectType::None;
+  selectedStoreId_ = -1;
+  selectedStoreHasOrder_ = false;
+  selectedStoreName_.clear();
+  selectedStoreInventory_.clear();
+  selectedStoreOrder_ = StoreOrderInfo{};
+  stores_.clear();
+  vehicles_.clear();
+  cachedRoadStoreCount_ = -1;
+  cachedBackgroundStoreCount_ = -1;
+  dataRefreshTimer_ = 0.25f;
+  supplierApprovalFailed_ = false;
   automaticSupplierApproval_ = settings.automaticSupplierApproval;
   batchDiscountPercent_ = 20;
   batchDiscountFailed_ = false;
@@ -2046,43 +2076,74 @@ void SimulationScreen::drawFinalReport() {
     ImGui::End();
     return;
   }
-  ImGui::Text("Завершённые заказы: %lld | Незавершённые: %lld",
-              finalReport_.completedOrders, finalReport_.pendingOrders);
-  ImGui::Text(
-      "Доставлено в магазины: %lld шт. | Получено от поставщика: %lld шт.",
-      finalReport_.deliveredUnits, finalReport_.suppliedUnits);
-  ImGui::Text("Выручка по завершённым доставкам: %.2f руб.",
-              finalReport_.revenueCents / 100.0);
-  ImGui::Text("Снижение выручки из-за уценки: %.2f руб.",
-              finalReport_.discountLossCents / 100.0);
-  ImGui::Text("Закупочная цена: %d%% обычной цены | Спрос: %d%%",
-              finalReport_.settings.purchaseCostPercent,
-              finalReport_.settings.demandPercent);
-  if (finalReport_.settings.initialFillPercent < 0) {
-    ImGui::TextUnformatted("Начальный запас: по спросу");
-  } else {
-    ImGui::Text("Начальная заполненность: %d%%",
-                finalReport_.settings.initialFillPercent);
+  const long long result = finalReport_.revenueCents -
+                           finalReport_.deliveredCostCents -
+                           finalReport_.writeoffCostCents;
+  const auto money = [](long long cents) {
+    std::string whole = std::to_string(cents / 100);
+    if (cents < 0 && cents / 100 == 0) whole = "-0";
+    const int first = cents < 0 ? 1 : 0;
+    for (int i = static_cast<int>(whole.size()) - 3; i > first; i -= 3) {
+      whole.insert(static_cast<std::size_t>(i), " ");
+    }
+    const int fraction = static_cast<int>(std::abs(cents % 100));
+    return whole + "," + (fraction < 10 ? "0" : "") + std::to_string(fraction) +
+           " руб.";
+  };
+  if (ImGui::BeginTable(
+          "ReportMetrics", 2,
+          ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_SizingStretchProp)) {
+    ImGui::TableSetupColumn("Показатель", ImGuiTableColumnFlags_WidthStretch);
+    ImGui::TableSetupColumn("Сумма", ImGuiTableColumnFlags_WidthFixed, 230);
+    const char* labels[] = {"Выручка", "Закупочная стоимость доставок",
+                            "Потери от списаний", "Результат"};
+    const long long values[] = {finalReport_.revenueCents,
+                                finalReport_.deliveredCostCents,
+                                finalReport_.writeoffCostCents, result};
+    for (int i = 0; i < 4; ++i) {
+      ImGui::TableNextRow();
+      ImGui::TableSetColumnIndex(0);
+      ImGui::TextUnformatted(labels[i]);
+      ImGui::TableSetColumnIndex(1);
+      const std::string amount = money(values[i]);
+      ImGui::SetCursorPosX(
+          ImGui::GetCursorPosX() +
+          std::max(0.0f, ImGui::GetContentRegionAvail().x -
+                             ImGui::CalcTextSize(amount.c_str()).x));
+      if (i == 3 && result < 0) {
+        ImGui::TextColored(ImVec4(0.95f, 0.5f, 0.5f, 1), "%s", amount.c_str());
+      } else {
+        ImGui::TextUnformatted(amount.c_str());
+      }
+    }
+    ImGui::EndTable();
   }
-  if (finalReport_.settings.stockCoverDays == 0) {
-    ImGui::TextUnformatted("Целевой запас: по сроку годности");
-  } else {
-    ImGui::Text("Целевой резерв: %d дней с учётом срока годности",
-                finalReport_.settings.stockCoverDays);
+  ImGui::Text("Заказы: %lld выполнено / %lld в работе | Доставлено: %lld шт.",
+              finalReport_.completedOrders, finalReport_.pendingOrders,
+              finalReport_.deliveredUnits);
+  ImGui::TextDisabled("Без расходов на перевозку, зарплаты и хранение.");
+  if (ImGui::CollapsingHeader("Параметры и расчёт")) {
+    ImGui::Text("Спрос: %d%% | Закупка: %d%% цены продажи",
+                finalReport_.settings.demandPercent,
+                finalReport_.settings.purchaseCostPercent);
+    if (finalReport_.settings.initialFillPercent < 0) {
+      ImGui::TextUnformatted("Начальный запас: автоматически");
+    } else {
+      ImGui::Text("Начальная заполненность: %d%%",
+                  finalReport_.settings.initialFillPercent);
+    }
+    if (finalReport_.settings.stockCoverDays == 0) {
+      ImGui::TextUnformatted("Резерв: по сроку годности");
+    } else {
+      ImGui::Text("Резерв: %d дней", finalReport_.settings.stockCoverDays);
+    }
+    ImGui::Text("Получено от поставщика: %lld шт. | Списано: %lld шт.",
+                finalReport_.suppliedUnits, finalReport_.writtenOffUnits);
+    ImGui::Text("Уценка: %.2f руб.", finalReport_.discountLossCents / 100.0);
+    ImGui::TextWrapped(
+        "Результат = выручка минус закупка доставленных товаров и списания. "
+        "Уценка уже учтена. Резервы не включены в продажи.");
   }
-  ImGui::Text("Себестоимость доставленного: %.2f руб.",
-              finalReport_.deliveredCostCents / 100.0);
-  ImGui::Text("Списано: %lld шт. | Себестоимость списаний: %.2f руб.",
-              finalReport_.writtenOffUnits,
-              finalReport_.writeoffCostCents / 100.0);
-  ImGui::Text("Валовой результат после списаний: %.2f руб.",
-              (finalReport_.revenueCents - finalReport_.deliveredCostCents -
-               finalReport_.writeoffCostCents) /
-                  100.0);
-  ImGui::TextWrapped(
-      "Закупочная цена постоянна в рамках эксперимента. Транспорт, зарплаты и хранение не учтены. "
-      "Уценка уже учтена в выручке и повторно не вычитается. "
-      "Выручка отражает стоимость доставки со склада, а не продажи магазинов покупателям.");
   ImGui::Separator();
   if (!ImGui::BeginTabBar("FinalReportTabs")) {
     ImGui::End();
@@ -2105,11 +2166,11 @@ void SimulationScreen::drawFinalReport() {
                           1590.0f)) {
       ImGui::TableSetupColumn("Товар", ImGuiTableColumnFlags_WidthFixed,
                               200.0f);
-      const char* headers[] = {"На складе, шт.",         "В магазинах, шт.",
-                               "В резерве, шт.",         "Доставлено, шт.",
-                               "Доставлено, уп.",        "Выручка, руб.",
-                               "Уценка, руб.",           "Списано, шт.",
-                               "Себест. списаний, руб.", "Поставлено, шт."};
+      const char* headers[] = {
+          "На складе, шт.",  "В магазинах, шт.", "В резерве, шт.",
+          "Доставлено, шт.", "Доставлено, уп.",  "Выручка, руб.",
+          "Уценка, руб.",    "Списано, шт.",     "Потери по закупке, руб.",
+          "Поставлено, шт."};
       for (const char* header : headers) {
         ImGui::TableSetupColumn(header, ImGuiTableColumnFlags_WidthFixed,
                                 135.0f);
@@ -2209,7 +2270,7 @@ void SimulationScreen::drawDailyFinanceChart() {
   ImGui::TextColored(ImVec4(0.3f, 0.9f, 0.45f, 1.0f), "Выручка за день");
   ImGui::SameLine();
   ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.35f, 1.0f),
-                     "Себестоимость списаний за день");
+                     "Потери от списаний за день");
   ImGui::TextWrapped(
       "Суммы в рублях. Наведите мышь на график для просмотра дня. "
       "Выручка учитывает только завершённые доставки; это не прибыль.");
@@ -2436,6 +2497,12 @@ void SimulationScreen::drawAmbientPlanes(sf::RenderWindow& window) {
 }
 
 void SimulationScreen::beginFinalAnimation() {
+  if (!finaleEnabled_) {
+    finaleState_ = FinaleState::None;
+    finaleTimer_ = 0.0f;
+    finalReportVisible_ = true;
+    return;
+  }
   finalReportVisible_ = false;
   finaleTimer_ = 0.0f;
   finaleStart_ = lastPlanePosition_;

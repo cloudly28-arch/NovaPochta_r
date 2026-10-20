@@ -45,15 +45,5 @@ int main(int argc, char** argv) {
               << row.capacity << '\n';
   }
 
-  // Example order. Uncomment to test real stock reservation/shipping.
-  // Order order(1, 1, "2026-10-04");
-  // order.addItem(OrderItem(1, 5)); // Milk
-  // order.addItem(OrderItem(2, 3)); // Bread
-  // if (orderService.createOrder(order) && orderService.reserveOrder(1)) {
-  //     taskService.createPickingTasksForOrder(1);
-  //     orderService.shipOrder(1);
-  //     orderService.completeOrder(1);
-  // }
-
   return 0;
 }
