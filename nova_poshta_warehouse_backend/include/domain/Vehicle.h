@@ -4,23 +4,23 @@
 #include "domain/Position.h"
 
 class Vehicle {
-private:
-    int id_{};
-    std::string model_;
-    double maxLoad_{};
-    bool available_{true};
-    Position position_{};
+ private:
+  int id_{};
+  std::string model_;
+  double maxLoad_{};
+  bool available_{true};
+  Position position_{};
 
-public:
-    Vehicle() = default;
-    Vehicle(int id, std::string model, double maxLoad);
+ public:
+  Vehicle() = default;
+  Vehicle(int id, std::string model, double maxLoad);
 
-    int getId() const;
-    const std::string& getModel() const;
-    double getMaxLoad() const;
-    bool isAvailable() const;
-    const Position& getPosition() const;
+  int getId() const;
+  const std::string& getModel() const;
+  double getMaxLoad() const;
+  bool isAvailable() const;
+  const Position& getPosition() const;
 
-    void setAvailable(bool available);
-    void setPosition(const Position& position);
+  void setAvailable(bool available);
+  void setPosition(const Position& position);
 };

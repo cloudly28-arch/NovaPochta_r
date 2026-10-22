@@ -5,37 +5,36 @@
 #include "application/BackendFacade.h"
 #include "ui/SimulationScreen.h"
 #include "ui/StartScreen.h"
+#include <filesystem>
 
-class Application
-{
-public:
-    Application();
-    ~Application();
+class Application {
+ public:
+  Application();
+  ~Application();
 
-    void run();
+  void run();
 
-private:
-    enum class Screen
-    {
-        Start,
-        Simulation
-    };
+ private:
+  enum class Screen { Start, Simulation };
 
-private:
-    void processEvents();
-    void update();
-    void render();
+ private:
+  void processEvents();
+  void update();
+  void render();
 
-private:
-    sf::RenderWindow window_;
-    sf::Clock deltaClock_;
+ private:
+  sf::RenderWindow window_;
+  sf::Clock deltaClock_;
 
-    Screen currentScreen_ =
-        Screen::Start;
+  Screen currentScreen_ = Screen::Start;
 
-    SimulationSettings settings_;
-    StartScreen startScreen_;
+  SimulationSettings settings_;
+  StartScreen startScreen_;
 
-    BackendFacade backend_;
-    SimulationScreen simulationScreen_;
+  BackendFacade backend_;
+  SimulationScreen simulationScreen_;
+
+  std::filesystem::path databasePath_;
+
+  std::filesystem::path schemaPath_;
 };

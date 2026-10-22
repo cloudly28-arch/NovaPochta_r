@@ -8,13 +8,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 include(FetchContent)
 
-FetchContent_Declare(
-    SFML
-    GIT_REPOSITORY https://github.com/SFML/SFML.git
-    GIT_TAG 3.0.2
-)
-
-FetchContent_MakeAvailable(SFML)
+find_package(SFML 3 REQUIRED COMPONENTS Graphics Window System)
 
 FetchContent_Declare(
     ImGui
@@ -73,9 +67,11 @@ add_custom_command(
         $<TARGET_FILE_DIR:NovaPoshtaWarehouseFrontend>/assets
 
     COMMAND ${CMAKE_COMMAND} -E make_directory
-        $<TARGET_FILE_DIR:NovaPoshtaWarehouseFrontend>/database
+    	$<TARGET_FILE_DIR:NovaPoshtaWarehouseFrontend>/database
 
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        ${CMAKE_CURRENT_SOURCE_DIR}/../nova_poshta_warehouse_backend/nova_poshta_warehouse.db
-        $<TARGET_FILE_DIR:NovaPoshtaWarehouseFrontend>/database/nova_poshta_warehouse.db
+    	${CMAKE_CURRENT_SOURCE_DIR}/../nova_poshta_warehouse_backend/database/schema.sql
+    	$<TARGET_FILE_DIR:NovaPoshtaWarehouseFrontend>/database/schema.sql
 )
+
+

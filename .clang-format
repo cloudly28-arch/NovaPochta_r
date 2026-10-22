@@ -1,0 +1,5 @@
+BasedOnStyle: Google
+# Keep include order and literal contents unchanged in this formatting-only pass.
+SortIncludes: Never
+BreakStringLiterals: false
+FixNamespaceComments: false

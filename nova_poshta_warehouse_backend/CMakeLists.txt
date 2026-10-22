@@ -2,20 +2,11 @@ cmake_minimum_required(VERSION 3.16)
 
 project(NovaPoshtaWarehouseBackend LANGUAGES CXX)
 
-include(FetchContent)
-
-FetchContent_Declare(
-    sqlite3
-    GIT_REPOSITORY https://github.com/underclocked/sqlite.git
-    GIT_TAG master
-)
-
-FetchContent_MakeAvailable(sqlite3)
-
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+find_package(SQLite3 REQUIRED)
 
 add_library(nova_warehouse_backend
     src/Warehouse.cpp
@@ -50,7 +41,7 @@ target_include_directories(
 target_link_libraries(
     nova_warehouse_backend
     PUBLIC
-    SQLite3
+    SQLite3::SQLite3
 )
 
 add_executable(
@@ -63,3 +54,14 @@ target_link_libraries(
     PRIVATE
     nova_warehouse_backend
 )
+
+option(NOVA_BUILD_TESTS "Build experiment settings regression tests" OFF)
+if(NOVA_BUILD_TESTS)
+    enable_testing()
+    add_executable(experiment_settings_test tests/experiment_settings_test.cpp)
+    target_link_libraries(experiment_settings_test PRIVATE nova_warehouse_backend)
+    add_test(NAME experiment_settings
+        COMMAND experiment_settings_test
+            ${CMAKE_CURRENT_SOURCE_DIR}/database/schema.sql
+            ${CMAKE_CURRENT_BINARY_DIR}/experiment_settings_test.db)
+endif()
